@@ -27,3 +27,24 @@ dotnet run --project src/Services/SmartMetrix.MeasurementOrchestrator
 ```
 
 Каждый сервис предоставляет `GET /health`, `GET /ready` и `GET /info`. Аппаратные и ML-операции намеренно ещё не эмулируют реальные измерения: следующий этап — подключение SDK и запись интеграционных адаптеров.
+
+## Общий bootstrap и наблюдаемость
+
+Все микросервисы подключают `SmartMetrix.ServiceDefaults`, который предоставляет:
+
+- liveness `/health`, readiness `/ready` и сведения о сервисе `/info`;
+- Problem Details для необработанных ошибок;
+- структурированный scope логов с `CorrelationId` и `MeasurementId`;
+- OpenTelemetry для HTTP, `HttpClient`, runtime и обработчиков событий;
+- проверку конфигурации при старте, единые HTTP-таймауты и graceful shutdown.
+
+Поддерживаемые настройки:
+
+| Настройка | Назначение | По умолчанию |
+|---|---|---:|
+| `SmartMetrix__ServiceName` | Имя ресурса OTel; автоматически берётся из assembly | имя приложения |
+| `SmartMetrix__HttpClientTimeoutSeconds` | Таймаут исходящих HTTP-запросов | 30 |
+| `SmartMetrix__ShutdownTimeoutSeconds` | Время graceful shutdown | 30 |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Включает экспорт traces, metrics и logs по OTLP | отключён |
+
+Корреляция принимается через `X-Correlation-ID`, контекст измерения — через `X-Measurement-ID`. Секреты задаются только через переменные окружения или внешний secret store и не должны добавляться в `appsettings*.json`.

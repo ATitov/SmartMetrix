@@ -45,6 +45,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMetrix.ArchitectureTests", "tests\SmartMetrix.ArchitectureTests\SmartMetrix.ArchitectureTests.csproj", "{ADE613E2-3A1C-4531-8D7D-B7B466512410}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartMetrix.ServiceDefaults", "src\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj", "{8656B10F-8BBC-497B-AB49-044BBE418CB1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -259,6 +261,18 @@ Global
 		{ADE613E2-3A1C-4531-8D7D-B7B466512410}.Release|x64.Build.0 = Release|Any CPU
 		{ADE613E2-3A1C-4531-8D7D-B7B466512410}.Release|x86.ActiveCfg = Release|Any CPU
 		{ADE613E2-3A1C-4531-8D7D-B7B466512410}.Release|x86.Build.0 = Release|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Debug|x64.Build.0 = Debug|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Debug|x86.Build.0 = Debug|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Release|x64.ActiveCfg = Release|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Release|x64.Build.0 = Release|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Release|x86.ActiveCfg = Release|Any CPU
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -283,5 +297,6 @@ Global
 		{D571FD62-1D31-462E-841C-400FCCC1354C} = {984BB9B3-3FA3-BE33-9484-CAC21695A33C}
 		{26505610-7C88-4D8D-A823-F80DA433E787} = {984BB9B3-3FA3-BE33-9484-CAC21695A33C}
 		{ADE613E2-3A1C-4531-8D7D-B7B466512410} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{8656B10F-8BBC-497B-AB49-044BBE418CB1} = {90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}
 	EndGlobalSection
 EndGlobal
