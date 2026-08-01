@@ -1,0 +1,28 @@
+namespace SmartMetrix.Domain;
+
+public readonly record struct MeasurementId(Guid Value)
+{
+    public static MeasurementId New() => new(Guid.CreateVersion7());
+    public override string ToString() => Value.ToString();
+}
+
+public enum MeasurementStatus
+{
+    Requested,
+    Capturing,
+    QualityControl,
+    Reconstructing,
+    Analysing,
+    Georeferencing,
+    Completed,
+    Rejected,
+    Failed
+}
+
+public sealed record Measurement(
+    MeasurementId Id,
+    string ExcavatorId,
+    DateTimeOffset RequestedAt,
+    MeasurementStatus Status,
+    string CoordinateSystemId,
+    string? CalibrationId = null);
