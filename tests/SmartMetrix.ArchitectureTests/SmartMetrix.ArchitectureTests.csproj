@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Contracts\SmartMetrix.Contracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Domain\SmartMetrix.Domain.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>
