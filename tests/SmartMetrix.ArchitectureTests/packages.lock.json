@@ -513,6 +513,14 @@
       "smartmetrix.domain": {
         "type": "Project"
       },
+      "smartmetrix.measurementorchestrator": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Domain": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
       "smartmetrix.messaging": {
         "type": "Project",
         "dependencies": {
