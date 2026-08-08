@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Testcontainers" Version="4.13.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Contracts\SmartMetrix.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Domain\SmartMetrix.Domain.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Messaging\SmartMetrix.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.MeasurementOrchestrator\SmartMetrix.MeasurementOrchestrator.csproj" />
+  </ItemGroup>
+
+</Project>
