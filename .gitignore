@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+.env
+data/
+artifacts/
+models/*.engine
+models/*.onnx

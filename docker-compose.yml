@@ -1,0 +1,36 @@
+name: smartmetrix
+
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: ["--jetstream", "--store_dir=/data"]
+    ports: ["4222:4222", "8222:8222"]
+    volumes: ["nats-data:/data"]
+
+  postgres:
+    image: postgis/postgis:17-3.5-alpine
+    environment:
+      POSTGRES_DB: smartmetrix
+      POSTGRES_USER: smartmetrix
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smartmetrix-dev}
+    ports: ["5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartmetrix"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: smartmetrix
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-smartmetrix-dev-secret}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio-data:/data"]
+
+volumes:
+  nats-data:
+  postgres-data:
+  minio-data:
