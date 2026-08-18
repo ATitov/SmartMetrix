@@ -43,7 +43,7 @@ public sealed class SegmentationGoldenTests
 
     private static SegmentationFrame GoldenFrame()
     {
-        var values = new (byte R, byte G, byte B)[] { (0,0,0),(0,0,0),(100,100,100),(100,100,100), (0,0,0),(0,0,0),(100,100,100),(100,100,100), (200,20,20),(200,20,20),(100,100,100),(100,100,100), (200,20,20),(200,20,20),(100,100,100),(100,100,100) };
+        var values = new (byte R, byte G, byte B)[] { (0, 0, 0), (0, 0, 0), (100, 100, 100), (100, 100, 100), (0, 0, 0), (0, 0, 0), (100, 100, 100), (100, 100, 100), (200, 20, 20), (200, 20, 20), (100, 100, 100), (100, 100, 100), (200, 20, 20), (200, 20, 20), (100, 100, 100), (100, 100, 100) };
         return new(4, 4, 3, "RGB8", values.SelectMany(x => new[] { x.R, x.G, x.B }).ToArray());
     }
     private static byte[] PgmPixels(byte[] value) { var newlines = 0; var index = 0; for (; index < value.Length && newlines < 3; index++) if (value[index] == '\n') newlines++; return value[index..]; }

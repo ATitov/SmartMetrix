@@ -18,8 +18,12 @@ public sealed class DepthReconstructionTests
         };
         var options = Options.Create(new DepthOptions
         {
-            MaximumDisparity = 20, MatchRadius = 2, MinimumSpeckleSize = 4,
-            MinimumConfidence = 0.05f, NearDistanceMetres = 2, FarDistanceMetres = 20
+            MaximumDisparity = 20,
+            MatchRadius = 2,
+            MinimumSpeckleSize = 4,
+            MinimumConfidence = 0.05f,
+            NearDistanceMetres = 2,
+            FarDistanceMetres = 20
         });
         var store = new MemoryArtifactStore();
         var reconstructor = new DepthReconstructor(new CpuStereoBackend(options), store, options);
@@ -54,8 +58,8 @@ public sealed class DepthReconstructionTests
         const int width = 128, height = 64;
         var pixels = new byte[source.Length];
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-            pixels[y * width + x] = x + shift < width ? source[y * width + x + shift] : (byte)0;
+            for (var x = 0; x < width; x++)
+                pixels[y * width + x] = x + shift < width ? source[y * width + x + shift] : (byte)0;
         return new GrayFrame(id, width, height, pixels);
     }
 

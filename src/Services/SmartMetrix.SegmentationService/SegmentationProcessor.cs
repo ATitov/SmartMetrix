@@ -42,13 +42,13 @@ public sealed class SegmentationProcessor(ISegmentationBackend backend, ISegment
             var tile = Extract(frame, origin.X, origin.Y, backend.Descriptor.Width, backend.Descriptor.Height);
             var prediction = backend.Predict(tile);
             for (var y = 0; y < Math.Min(tile.Height, frame.Height - origin.Y); y++)
-            for (var x = 0; x < Math.Min(tile.Width, frame.Width - origin.X); x++)
-            {
-                var source = y * tile.Width + x; var target = (origin.Y + y) * frame.Width + origin.X + x;
-                var weight = EdgeWeight(x, y, tile.Width, tile.Height, _options.TileOverlap);
-                scores[target * 3 + prediction.Classes[source]] += prediction.Confidence[source] * weight;
-                weights[target] += weight;
-            }
+                for (var x = 0; x < Math.Min(tile.Width, frame.Width - origin.X); x++)
+                {
+                    var source = y * tile.Width + x; var target = (origin.Y + y) * frame.Width + origin.X + x;
+                    var weight = EdgeWeight(x, y, tile.Width, tile.Height, _options.TileOverlap);
+                    scores[target * 3 + prediction.Classes[source]] += prediction.Confidence[source] * weight;
+                    weights[target] += weight;
+                }
         }
         var mask = new byte[pixels]; var confidence = new byte[pixels]; var counts = new int[3]; var confidenceSum = 0d;
         for (var i = 0; i < pixels; i++)
@@ -84,10 +84,10 @@ public sealed class SegmentationProcessor(ISegmentationBackend backend, ISegment
     {
         var result = new byte[width * height * 3];
         for (var y = 0; y < height; y++) for (var x = 0; x < width; x++)
-        {
-            var sourceX = Math.Min(left + x, frame.Width - 1); var sourceY = Math.Min(top + y, frame.Height - 1);
-            Buffer.BlockCopy(frame.Pixels, (sourceY * frame.Width + sourceX) * 3, result, (y * width + x) * 3, 3);
-        }
+            {
+                var sourceX = Math.Min(left + x, frame.Width - 1); var sourceY = Math.Min(top + y, frame.Height - 1);
+                Buffer.BlockCopy(frame.Pixels, (sourceY * frame.Width + sourceX) * 3, result, (y * width + x) * 3, 3);
+            }
         return new(width, height, result);
     }
 

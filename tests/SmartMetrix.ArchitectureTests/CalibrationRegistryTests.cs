@@ -60,8 +60,8 @@ public sealed class CalibrationRegistryTests
         "rig-1",
         [Camera("A", 0), Camera("B", .7), Camera("C", 1.5)],
         new(.7, .8, 1.5),
-        new([1,0,0,0,1,0,0,0,1], [0,0,0]),
+        new([1, 0, 0, 0, 1, 0, 0, 0, 1], [0, 0, 0]),
         error);
 
-    private static CameraCalibration Camera(string id, double x) => new(id, new(1000, 1000, 640, 360, 1280, 720), [0,0,0,0,0], [1,0,0,0,1,0,0,0,1], [x,0,0], $"s3://calibration/{id}.map");
+    private static CameraCalibration Camera(string id, double x) => new(id, new(1000, 1000, 640, 360, 1280, 720), [0, 0, 0, 0, 0], [1, 0, 0, 0, 1, 0, 0, 0, 1], [x, 0, 0], $"s3://calibration/{id}.map");
 }

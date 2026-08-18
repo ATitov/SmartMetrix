@@ -21,9 +21,9 @@ public sealed class PoseResolver(TransformRegistry transforms, IOptions<Position
             throw new PoseUnavailableException("IncompletePose", "At least one position and orientation source are required.");
 
         for (var i = 0; i < positions.Length; i++)
-        for (var j = i + 1; j < positions.Length; j++)
-            if (Vector3.Distance(positions[i].Position!.Value, positions[j].Position!.Value) > options.MaximumSourceDisagreementMetres)
-                throw new PoseUnavailableException("InconsistentPose", "Position sources disagree beyond the configured threshold.");
+            for (var j = i + 1; j < positions.Length; j++)
+                if (Vector3.Distance(positions[i].Position!.Value, positions[j].Position!.Value) > options.MaximumSourceDisagreementMetres)
+                    throw new PoseUnavailableException("InconsistentPose", "Position sources disagree beyond the configured threshold.");
 
         var localPosition = positions.Aggregate(Vector3.Zero, (sum, x) => sum + x.Position!.Value) / positions.Length;
         var localRotation = AverageRotations(rotations.Select(x => x.Orientation!.Value));

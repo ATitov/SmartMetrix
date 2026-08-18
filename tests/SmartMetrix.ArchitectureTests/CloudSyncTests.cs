@@ -56,7 +56,9 @@ public sealed class CloudSyncTests : IDisposable
         using var client = new HttpClient(handler) { BaseAddress = new Uri("http://cloud/") };
         var uploader = new CloudSyncUploader(client, Options.Create(new CloudSyncOptions
         {
-            QueuePath = Path.Combine(root, "queue"), ChunkSizeBytes = 4, BandwidthLimitBytesPerSecond = 0
+            QueuePath = Path.Combine(root, "queue"),
+            ChunkSizeBytes = 4,
+            BandwidthLimitBytesPerSecond = 0
         }));
         var checkpoints = 0;
         var completed = await uploader.UploadAsync(item, _ => { checkpoints++; return Task.CompletedTask; }, CancellationToken.None);

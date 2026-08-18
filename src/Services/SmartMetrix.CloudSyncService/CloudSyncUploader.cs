@@ -19,7 +19,9 @@ public sealed class CloudSyncUploader(HttpClient httpClient, IOptions<CloudSyncO
         {
             Content = JsonContent.Create(new
             {
-                item.MeasurementId, item.Version, item.Metadata,
+                item.MeasurementId,
+                item.Version,
+                item.Metadata,
                 Artifacts = item.Artifacts.Select(x => new { x.Name, x.ContentType, x.Sha256, x.Size, x.Priority })
             })
         };

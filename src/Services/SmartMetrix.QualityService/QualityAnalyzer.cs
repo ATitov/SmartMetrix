@@ -97,13 +97,13 @@ public sealed class QualityAnalyzer(
         var laplacianSum = 0d;
         var count = 0;
         for (var y = 1; y < frame.Height - 1; y++)
-        for (var x = 1; x < frame.Width - 1; x++)
-        {
-            var i = y * frame.Width + x;
-            var laplacian = 4 * pixels[i] - pixels[i - 1] - pixels[i + 1] - pixels[i - frame.Width] - pixels[i + frame.Width];
-            laplacianSum += laplacian * laplacian;
-            count++;
-        }
+            for (var x = 1; x < frame.Width - 1; x++)
+            {
+                var i = y * frame.Width + x;
+                var laplacian = 4 * pixels[i] - pixels[i - 1] - pixels[i + 1] - pixels[i - frame.Width] - pixels[i + frame.Width];
+                laplacianSum += laplacian * laplacian;
+                count++;
+            }
         var sharpness = count == 0 ? 0 : Clamp01((laplacianSum / count) / 16_384d);
         var exposure = Clamp01(1 - Math.Abs(mean - 0.5) * 2);
         var saturation = pixels.Count(x => x <= 5 || x >= 250) / (double)pixels.Length;

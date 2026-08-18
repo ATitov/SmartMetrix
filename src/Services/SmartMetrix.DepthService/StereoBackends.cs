@@ -33,31 +33,31 @@ public sealed class CpuStereoBackend(IOptions<DepthOptions> configured) : IStere
         var output = Enumerable.Repeat(DisparitySample.Invalid, left.Pixels.Length).ToArray();
         var radius = _options.MatchRadius;
         for (var y = radius; y < left.Height - radius; y++)
-        for (var x = radius; x < left.Width - radius; x++)
-        {
-            var best = int.MaxValue;
-            var second = int.MaxValue;
-            var bestDisparity = 0;
-            var available = direction < 0 ? x - radius : left.Width - radius - 1 - x;
-            var max = Math.Min(_options.MaximumDisparity, available);
-            for (var disparity = _options.MinimumDisparity; disparity <= max; disparity++)
+            for (var x = radius; x < left.Width - radius; x++)
             {
-                var cost = 0;
-                for (var dy = -radius; dy <= radius; dy++)
-                for (var dx = -radius; dx <= radius; dx++)
-                    cost += Math.Abs(left.Pixels[(y + dy) * left.Width + x + dx] -
-                                     right.Pixels[(y + dy) * right.Width + x + dx + direction * disparity]);
-                if (cost < best) { second = best; best = cost; bestDisparity = disparity; }
-                else if (cost < second) second = cost;
-            }
+                var best = int.MaxValue;
+                var second = int.MaxValue;
+                var bestDisparity = 0;
+                var available = direction < 0 ? x - radius : left.Width - radius - 1 - x;
+                var max = Math.Min(_options.MaximumDisparity, available);
+                for (var disparity = _options.MinimumDisparity; disparity <= max; disparity++)
+                {
+                    var cost = 0;
+                    for (var dy = -radius; dy <= radius; dy++)
+                        for (var dx = -radius; dx <= radius; dx++)
+                            cost += Math.Abs(left.Pixels[(y + dy) * left.Width + x + dx] -
+                                             right.Pixels[(y + dy) * right.Width + x + dx + direction * disparity]);
+                    if (cost < best) { second = best; best = cost; bestDisparity = disparity; }
+                    else if (cost < second) second = cost;
+                }
 
-            if (bestDisparity == 0) continue;
-            var uniqueness = second == int.MaxValue ? 0f : Math.Clamp((second - best) / (float)Math.Max(second, 1), 0, 1);
-            var photometric = 1f - Math.Clamp(best / (float)((radius * 2 + 1) * (radius * 2 + 1) * 255), 0, 1);
-            var confidence = uniqueness * photometric;
-            if (confidence >= _options.MinimumConfidence)
-                output[y * left.Width + x] = new DisparitySample(bestDisparity, confidence);
-        }
+                if (bestDisparity == 0) continue;
+                var uniqueness = second == int.MaxValue ? 0f : Math.Clamp((second - best) / (float)Math.Max(second, 1), 0, 1);
+                var photometric = 1f - Math.Clamp(best / (float)((radius * 2 + 1) * (radius * 2 + 1) * 255), 0, 1);
+                var confidence = uniqueness * photometric;
+                if (confidence >= _options.MinimumConfidence)
+                    output[y * left.Width + x] = new DisparitySample(bestDisparity, confidence);
+            }
         return output;
     }
 
@@ -97,15 +97,15 @@ public sealed class CpuStereoBackend(IOptions<DepthOptions> configured) : IStere
     private void ApplyConsistency(DisparitySample[] forward, DisparitySample[] reverse, int width, int height)
     {
         for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
-        {
-            var index = y * width + x;
-            var sample = forward[index];
-            if (!sample.IsValid) continue;
-            var rightX = x - (int)MathF.Round(sample.Disparity);
-            if (rightX < 0 || !reverse[y * width + rightX].IsValid ||
-                Math.Abs(reverse[y * width + rightX].Disparity - sample.Disparity) > _options.LeftRightTolerancePixels)
-                forward[index] = DisparitySample.Invalid;
-        }
+            for (var x = 0; x < width; x++)
+            {
+                var index = y * width + x;
+                var sample = forward[index];
+                if (!sample.IsValid) continue;
+                var rightX = x - (int)MathF.Round(sample.Disparity);
+                if (rightX < 0 || !reverse[y * width + rightX].IsValid ||
+                    Math.Abs(reverse[y * width + rightX].Disparity - sample.Disparity) > _options.LeftRightTolerancePixels)
+                    forward[index] = DisparitySample.Invalid;
+            }
     }
 }
