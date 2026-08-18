@@ -1,0 +1,25 @@
+[Unit]
+Description=SmartMetrix edge stack
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/smartmetrix/current
+Environment=SMARTMETRIX_ENV_FILE=/etc/smartmetrix/edge.env
+EnvironmentFile=-/etc/smartmetrix/deployment.env
+EnvironmentFile=-/etc/smartmetrix/version.env
+ExecStartPre=/usr/bin/docker compose -f deploy/edge/compose.yml config --quiet
+ExecStart=/usr/bin/docker compose -f deploy/edge/compose.yml up -d --remove-orphans --wait --wait-timeout 180
+ExecStartPost=/bin/bash deploy/edge/scripts/healthcheck.sh
+ExecReload=/usr/bin/docker compose -f deploy/edge/compose.yml up -d --remove-orphans --wait --wait-timeout 180
+ExecStop=/usr/bin/docker compose -f deploy/edge/compose.yml down --timeout 30
+TimeoutStartSec=240
+TimeoutStopSec=90
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

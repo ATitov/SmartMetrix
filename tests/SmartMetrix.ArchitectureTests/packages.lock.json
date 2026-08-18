@@ -517,6 +517,14 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "smartmetrix.apigateway": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Domain": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
       "smartmetrix.blockanalysisservice": {
         "type": "Project",
         "dependencies": {
@@ -533,6 +541,13 @@
         }
       },
       "smartmetrix.cameraservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.cloudsyncservice": {
         "type": "Project",
         "dependencies": {
           "SmartMetrix.Contracts": "[1.0.0, )",
@@ -562,6 +577,15 @@
       },
       "smartmetrix.domain": {
         "type": "Project"
+      },
+      "smartmetrix.e2esimulator": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.BlockAnalysisService": "[1.0.0, )",
+          "SmartMetrix.GeoreferenceService": "[1.0.0, )",
+          "SmartMetrix.QualityService": "[1.0.0, )",
+          "SmartMetrix.SegmentationService": "[1.0.0, )"
+        }
       },
       "smartmetrix.georeferenceservice": {
         "type": "Project",

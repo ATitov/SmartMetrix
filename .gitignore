@@ -6,6 +6,8 @@
 *.user
 *.suo
 .env
+deploy/edge/edge.env
+deploy/edge/deployment.env
 data/
 artifacts/
 models/*.engine

@@ -36,6 +36,9 @@
     <ProjectReference Include="..\..\src\Services\SmartMetrix.LocalPositioningService\SmartMetrix.LocalPositioningService.csproj" />
     <ProjectReference Include="..\..\src\Services\SmartMetrix.ControlPointService\SmartMetrix.ControlPointService.csproj" />
     <ProjectReference Include="..\..\src\Services\SmartMetrix.GeoreferenceService\SmartMetrix.GeoreferenceService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.ApiGateway\SmartMetrix.ApiGateway.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.CloudSyncService\SmartMetrix.CloudSyncService.csproj" />
+    <ProjectReference Include="..\..\tools\SmartMetrix.E2ESimulator\SmartMetrix.E2ESimulator.csproj" />
   </ItemGroup>
 
 </Project>

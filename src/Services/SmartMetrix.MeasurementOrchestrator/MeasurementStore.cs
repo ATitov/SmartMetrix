@@ -6,6 +6,7 @@ namespace SmartMetrix.MeasurementOrchestrator;
 public interface IMeasurementStore
 {
     Task<MeasurementProcess?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<MeasurementProcess>> GetRecentAsync(int limit, bool activeOnly, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MeasurementProcess>> GetUnfinishedAsync(CancellationToken cancellationToken = default);
     Task<bool> TryCreateAsync(MeasurementProcess measurement, CancellationToken cancellationToken = default);
     Task<bool> TrySaveAsync(MeasurementProcess measurement, long expectedVersion, CancellationToken cancellationToken = default);
@@ -36,6 +37,22 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
             if (item is not null && item.Status is not (SmartMetrix.Domain.MeasurementStatus.Completed or SmartMetrix.Domain.MeasurementStatus.Rejected or SmartMetrix.Domain.MeasurementStatus.Failed)) result.Add(item);
         }
         return result;
+    }
+
+    public async Task<IReadOnlyList<MeasurementProcess>> GetRecentAsync(int limit, bool activeOnly, CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(_directory);
+        var result = new List<MeasurementProcess>();
+        foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
+        {
+            await using var stream = File.OpenRead(path);
+            var item = await JsonSerializer.DeserializeAsync<MeasurementProcess>(stream, JsonOptions, cancellationToken);
+            if (item is null) continue;
+            var terminal = item.Status is SmartMetrix.Domain.MeasurementStatus.Completed or
+                SmartMetrix.Domain.MeasurementStatus.Rejected or SmartMetrix.Domain.MeasurementStatus.Failed;
+            if (!activeOnly || !terminal) result.Add(item);
+        }
+        return result.OrderByDescending(item => item.UpdatedAt).Take(Math.Clamp(limit, 1, 200)).ToArray();
     }
 
     public async Task<bool> TryCreateAsync(MeasurementProcess measurement, CancellationToken cancellationToken = default)

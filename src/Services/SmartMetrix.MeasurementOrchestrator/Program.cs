@@ -25,6 +25,9 @@ app.MapPost("/measurements", async (StartMeasurementRequest request, Measurement
 app.MapGet("/measurements/{id:guid}", async (Guid id, IMeasurementStore store, CancellationToken ct) =>
     await store.GetAsync(id, ct) is { } measurement ? Results.Ok(measurement) : Results.NotFound());
 
+app.MapGet("/measurements", (int? limit, bool? active, IMeasurementStore store, CancellationToken ct) =>
+    store.GetRecentAsync(limit ?? 50, active ?? false, ct));
+
 app.MapPost("/measurements/{id:guid}/cancel", async (Guid id, WorkflowCommand request, MeasurementWorkflow workflow, CancellationToken ct) =>
     Results.Ok(await workflow.CancelAsync(id, request.CommandId, request.Reason, request.ExpectedVersion, ct)));
 
