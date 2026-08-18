@@ -5,6 +5,11 @@
     <ProjectReference Include="..\..\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="native\smartmetrix_arena.h" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="simulator-frames\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

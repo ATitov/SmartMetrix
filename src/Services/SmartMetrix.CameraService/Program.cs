@@ -1,11 +1,33 @@
 using SmartMetrix.ServiceDefaults;
+using SmartMetrix.CameraService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.Services.AddCameraCapture(builder.Configuration);
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
 app.MapSmartMetrixDefaultEndpoints();
+
+app.MapPost("/v1/measurements/{measurementId:guid}/capture", async (
+    Guid measurementId,
+    CaptureRequest request,
+    CaptureCoordinator coordinator,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await coordinator.CaptureAsync(measurementId, request, cancellationToken));
+    }
+    catch (CameraCaptureException exception)
+    {
+        return Results.Problem(
+            title: exception.Code,
+            detail: exception.Message,
+            statusCode: exception.StatusCode,
+            extensions: new Dictionary<string, object?> { ["code"] = exception.Code });
+    }
+});
 
 app.Run();
 

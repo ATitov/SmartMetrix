@@ -5,6 +5,10 @@
     <ProjectReference Include="..\..\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.102" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

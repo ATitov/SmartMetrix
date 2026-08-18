@@ -25,6 +25,17 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Messaging\SmartMetrix.Messaging.csproj" />
     <ProjectReference Include="..\..\src\Services\SmartMetrix.MeasurementOrchestrator\SmartMetrix.MeasurementOrchestrator.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.StorageService\SmartMetrix.StorageService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.CameraService\SmartMetrix.CameraService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.TriggerService\SmartMetrix.TriggerService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.CalibrationService\SmartMetrix.CalibrationService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.QualityService\SmartMetrix.QualityService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.DepthService\SmartMetrix.DepthService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.SegmentationService\SmartMetrix.SegmentationService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.BlockAnalysisService\SmartMetrix.BlockAnalysisService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.LocalPositioningService\SmartMetrix.LocalPositioningService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.ControlPointService\SmartMetrix.ControlPointService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.GeoreferenceService\SmartMetrix.GeoreferenceService.csproj" />
   </ItemGroup>
 
 </Project>

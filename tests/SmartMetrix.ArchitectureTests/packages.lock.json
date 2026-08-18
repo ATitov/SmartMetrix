@@ -48,6 +48,19 @@
         "resolved": "3.1.4",
         "contentHash": "5mj99LvCqrq3CNi06xYdyIAXOEh+5b33F2nErCzI5zWiDdLHXiPXEWFSUAF8zlIv0ZWqjZNCwHTQeAPYbF3pCg=="
       },
+      "AWSSDK.Core": {
+        "type": "Transitive",
+        "resolved": "4.0.100.9",
+        "contentHash": "OPYy41jZjXwxxcYRotaq24HDrwUnVtBB/mvg1IwB9D1ICXAtHqMa1sp2hpmlVJCZwjlcrPcTCJIejInvV1vp5g=="
+      },
+      "AWSSDK.S3": {
+        "type": "Transitive",
+        "resolved": "4.0.102",
+        "contentHash": "+5ToRNfpNnu1/oEbb1P+4AnHpknda1+eybYkhT6viFC4v772ZONeFYGR1pHgm7Zum0nvLDpSEJl/4y+wggpIpg==",
+        "dependencies": {
+          "AWSSDK.Core": "[4.0.100.9, 5.0.0)"
+        }
+      },
       "BouncyCastle.Cryptography": {
         "type": "Transitive",
         "resolved": "2.6.2",
@@ -504,14 +517,66 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "smartmetrix.blockanalysisservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Domain": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.calibrationservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.cameraservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
       "smartmetrix.contracts": {
         "type": "Project",
         "dependencies": {
           "SmartMetrix.Domain": "[1.0.0, )"
         }
       },
+      "smartmetrix.controlpointservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.depthservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Domain": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
       "smartmetrix.domain": {
         "type": "Project"
+      },
+      "smartmetrix.georeferenceservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Domain": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.localpositioningservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
       },
       "smartmetrix.measurementorchestrator": {
         "type": "Project",
@@ -530,6 +595,20 @@
           "SmartMetrix.Contracts": "[1.0.0, )"
         }
       },
+      "smartmetrix.qualityservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.segmentationservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
       "smartmetrix.servicedefaults": {
         "type": "Project",
         "dependencies": {
@@ -538,6 +617,22 @@
           "OpenTelemetry.Instrumentation.AspNetCore": "[1.17.0, )",
           "OpenTelemetry.Instrumentation.Http": "[1.17.0, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.17.0, )"
+        }
+      },
+      "smartmetrix.storageservice": {
+        "type": "Project",
+        "dependencies": {
+          "AWSSDK.S3": "[4.0.102, )",
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.triggerservice": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Messaging": "[1.0.0, )",
+          "SmartMetrix.ServiceDefaults": "[1.0.0, )"
         }
       }
     }

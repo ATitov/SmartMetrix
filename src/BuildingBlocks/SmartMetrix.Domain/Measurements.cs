@@ -25,4 +25,4 @@ public sealed record Measurement(
     DateTimeOffset RequestedAt,
     MeasurementStatus Status,
     string CoordinateSystemId,
-    string? CalibrationId = null);
+    string CalibrationId);
