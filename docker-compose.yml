@@ -29,6 +29,24 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-smartmetrix-dev-secret}
     ports: ["9000:9000", "9001:9001"]
     volumes: ["minio-data:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  storage-service:
+    build:
+      context: .
+      dockerfile: src/Services/SmartMetrix.StorageService/Dockerfile
+    environment:
+      Storage__Endpoint: http://minio:9000
+      Storage__AccessKey: smartmetrix
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-smartmetrix-dev-secret}
+    ports: ["5105:8080"]
+    depends_on:
+      minio:
+        condition: service_healthy
 
 volumes:
   nats-data:

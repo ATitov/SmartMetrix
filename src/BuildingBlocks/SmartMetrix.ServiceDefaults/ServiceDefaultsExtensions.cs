@@ -64,12 +64,12 @@ public static class ServiceDefaultsExtensions
         app.MapGet("/info", (
             IOptions<SmartMetrixServiceOptions> options,
             IWebHostEnvironment environment) => Results.Ok(new
-        {
-            service = options.Value.ServiceName,
-            version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(),
-            environment = environment.EnvironmentName,
-            utcNow = DateTimeOffset.UtcNow
-        }));
+            {
+                service = options.Value.ServiceName,
+                version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString(),
+                environment = environment.EnvironmentName,
+                utcNow = DateTimeOffset.UtcNow
+            }));
 
         app.MapHealthChecks("/health", new HealthCheckOptions
         {

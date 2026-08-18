@@ -1,0 +1,200 @@
+name: smartmetrix-edge
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-service: &service
+  platform: linux/arm64
+  restart: unless-stopped
+  init: true
+  security_opt: ["no-new-privileges:true"]
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+  logging: *logging
+  networks: [backend]
+  environment: &common-environment
+    ASPNETCORE_ENVIRONMENT: Production
+    SmartMetrix__Messaging__Url: nats://nats:4222
+  depends_on:
+    nats: { condition: service_healthy }
+
+x-build: &build
+  context: ../..
+  dockerfile: deploy/edge/Dockerfile
+  platforms: [linux/arm64]
+
+services:
+  nats:
+    image: nats:2.11-alpine
+    platform: linux/arm64
+    command: ["--jetstream", "--store_dir=/data", "--max_file_store=8GB", "--http_port=8222"]
+    restart: unless-stopped
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/nats:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+    networks: [backend]
+
+  postgres:
+    image: postgis/postgis:17-3.5
+    platform: linux/arm64
+    restart: unless-stopped
+    env_file: ["${SMARTMETRIX_ENV_FILE:-/etc/smartmetrix/edge.env}"]
+    environment:
+      POSTGRES_DB: smartmetrix
+      POSTGRES_USER: smartmetrix
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartmetrix -d smartmetrix"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+    networks: [backend]
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    platform: linux/arm64
+    command: server /data --console-address :9001
+    restart: unless-stopped
+    env_file: ["${SMARTMETRIX_ENV_FILE:-/etc/smartmetrix/edge.env}"]
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/minio:/data"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+    networks: [backend]
+
+  storage-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-storage:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.StorageService } }
+    env_file: ["${SMARTMETRIX_ENV_FILE:-/etc/smartmetrix/edge.env}"]
+    environment:
+      <<: *common-environment
+      Storage__Endpoint: http://minio:9000
+      Storage__AccessKey: ${MINIO_ROOT_USER:-smartmetrix}
+    depends_on:
+      minio: { condition: service_healthy }
+
+  measurement-orchestrator:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-orchestrator:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.MeasurementOrchestrator } }
+
+  camera-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-camera:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.CameraService } }
+    # NVIDIA Container Toolkit exposes the Jetson GPU without privileged mode.
+    runtime: nvidia
+    gpus: all
+    group_add: ["${VIDEO_GID:-44}"]
+    devices:
+      - "${CAMERA_DEVICE:-/dev/video0}:${CAMERA_DEVICE:-/dev/video0}"
+    volumes:
+      - /usr/local/cuda:/usr/local/cuda:ro
+      - /opt/nvidia:/opt/nvidia:ro
+    environment:
+      <<: *common-environment
+      Camera__Adapter: ${CAMERA_ADAPTER:-Arena}
+      Camera__StorageServiceUrl: http://storage-service:8080
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+    depends_on:
+      storage-service: { condition: service_healthy }
+
+  depth-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-depth:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.DepthService } }
+    runtime: nvidia
+    gpus: all
+    environment:
+      <<: *common-environment
+      Depth__Backend: ${DEPTH_BACKEND:-Cpu}
+      Depth__StorageBaseUrl: http://storage-service:8080
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    depends_on:
+      storage-service: { condition: service_healthy }
+
+  segmentation-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-segmentation:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.SegmentationService } }
+    runtime: nvidia
+    gpus: all
+    volumes: ["${SMARTMETRIX_MODEL_ROOT:-/opt/smartmetrix/models}:/app/models:ro"]
+    environment:
+      <<: *common-environment
+      Segmentation__StorageBaseUrl: http://storage-service:8080
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    depends_on:
+      storage-service: { condition: service_healthy }
+
+  quality-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-quality:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.QualityService } }
+
+  trigger-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-trigger:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.TriggerService } }
+
+  calibration-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-calibration:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.CalibrationService } }
+
+  local-positioning-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-positioning:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.LocalPositioningService } }
+
+  georeference-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-georeference:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.GeoreferenceService } }
+
+  block-analysis-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-block-analysis:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.BlockAnalysisService } }
+
+  control-point-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-control-point:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.ControlPointService } }
+
+  cloud-sync-service:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-cloud-sync:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.CloudSyncService } }
+
+  api-gateway:
+    <<: *service
+    image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-api:${SMARTMETRIX_VERSION:-current}
+    build: { <<: *build, args: { SERVICE: SmartMetrix.ApiGateway } }
+    env_file: ["${SMARTMETRIX_ENV_FILE:-/etc/smartmetrix/edge.env}"]
+    ports: ["${SMARTMETRIX_HTTP_BIND:-127.0.0.1}:8080:8080"]
+    environment:
+      <<: *common-environment
+      OperatorApi__OrchestratorUrl: http://measurement-orchestrator:8080
+      OperatorApi__Components__0__ReadyUrl: http://camera-service:8080/ready
+      OperatorApi__Components__1__ReadyUrl: http://storage-service:8080/ready
+      OperatorApi__Components__2__ReadyUrl: http://nats:8222/healthz
+
+networks:
+  backend:
+    internal: true

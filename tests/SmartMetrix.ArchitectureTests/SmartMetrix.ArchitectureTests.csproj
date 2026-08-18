@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+    <PackageReference Include="Testcontainers" Version="4.13.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
@@ -22,6 +24,22 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Contracts\SmartMetrix.Contracts.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Domain\SmartMetrix.Domain.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.ServiceDefaults\SmartMetrix.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\SmartMetrix.Messaging\SmartMetrix.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.MeasurementOrchestrator\SmartMetrix.MeasurementOrchestrator.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.StorageService\SmartMetrix.StorageService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.CameraService\SmartMetrix.CameraService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.TriggerService\SmartMetrix.TriggerService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.CalibrationService\SmartMetrix.CalibrationService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.QualityService\SmartMetrix.QualityService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.DepthService\SmartMetrix.DepthService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.SegmentationService\SmartMetrix.SegmentationService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.BlockAnalysisService\SmartMetrix.BlockAnalysisService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.LocalPositioningService\SmartMetrix.LocalPositioningService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.ControlPointService\SmartMetrix.ControlPointService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.GeoreferenceService\SmartMetrix.GeoreferenceService.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.ApiGateway\SmartMetrix.ApiGateway.csproj" />
+    <ProjectReference Include="..\..\src\Services\SmartMetrix.CloudSyncService\SmartMetrix.CloudSyncService.csproj" />
+    <ProjectReference Include="..\..\tools\SmartMetrix.E2ESimulator\SmartMetrix.E2ESimulator.csproj" />
   </ItemGroup>
 
 </Project>

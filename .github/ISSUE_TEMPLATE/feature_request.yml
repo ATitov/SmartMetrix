@@ -1,0 +1,31 @@
+name: Запрос на изменение
+description: Предложить новую возможность или улучшение
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Проблема
+      description: Какую пользовательскую или инженерную проблему нужно решить?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Ожидаемый результат
+      description: Опишите проверяемый результат, а не только способ реализации.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Объём и ограничения
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии приёмки
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true

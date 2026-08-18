@@ -5,7 +5,18 @@ namespace SmartMetrix.Contracts;
 public sealed record CaptureRequested(
     MeasurementId MeasurementId,
     string Reason,
-    DateTimeOffset RequestedAt);
+    DateTimeOffset RequestedAt,
+    CaptureDecisionInputs? Inputs = null);
+
+public sealed record CaptureDecisionInputs(
+    double CanSpeedMetresPerSecond,
+    double EncoderSpeedMetresPerSecond,
+    double VibrationRmsMetresPerSecondSquared,
+    double AngularVelocityDegreesPerSecond,
+    double DistanceMetres,
+    bool CamerasReady,
+    bool ManualCommand,
+    bool ManualInhibit);
 
 public sealed record FrameReference(
     string CameraId,
@@ -41,7 +52,8 @@ public sealed record PointCloudCreated(
 public sealed record SegmentationCreated(
     MeasurementId MeasurementId,
     Uri MaskUri,
-    string ModelVersion);
+    string ModelVersion,
+    double Confidence);
 
 public sealed record MeasurementCompleted(
     MeasurementId MeasurementId,

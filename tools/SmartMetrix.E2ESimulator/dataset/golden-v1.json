@@ -1,0 +1,20 @@
+{
+  "datasetVersion": "golden-v1",
+  "modelVersion": "rocks-deterministic-v1",
+  "calibrationVersion": "rig-calibration-v1",
+  "transformVersion": "mine-transform-v1",
+  "width": 16,
+  "height": 12,
+  "hardwareTimestampNanoseconds": 1722500000000000000,
+  "distanceMetres": 20.0,
+  "expectedD50Millimetres": 75.0,
+  "expectedD80Millimetres": 75.0,
+  "expectedPosition": { "xMetres": 125.0, "yMetres": 48.0, "zMetres": 7.0 },
+  "acceptance": {
+    "maximumD50RelativeError": 0.15,
+    "maximumD80RelativeError": 0.15,
+    "maximumCoordinateErrorMetres": 0.05,
+    "maximumDurationMilliseconds": 5000.0,
+    "maximumRejectedFrameFraction": 0.0
+  }
+}

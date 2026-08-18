@@ -1,0 +1,9 @@
+[Unit]
+Description=SmartMetrix edge health watchdog
+After=smartmetrix-edge.service
+Requires=smartmetrix-edge.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/smartmetrix/current
+ExecStart=/bin/bash deploy/edge/scripts/healthcheck.sh --restart

@@ -1,0 +1,35 @@
+name: Сообщение об ошибке
+description: Зафиксировать воспроизводимый дефект
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Описание
+      description: Что произошло и чего вы ожидали?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Шаги воспроизведения
+      placeholder: |
+        1. Запустить ...
+        2. Выполнить ...
+        3. Наблюдать ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Окружение
+      description: Версия приложения, ОС, оборудование и значимые настройки.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи и дополнительные материалы
+      render: shell
