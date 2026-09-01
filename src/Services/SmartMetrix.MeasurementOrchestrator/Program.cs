@@ -9,6 +9,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IMeasurementStore, JsonMeasurementStore>();
 builder.Services.AddSingleton<MeasurementWorkflow>();
 builder.Services.AddHostedService<MeasurementRecoveryService>();
+builder.Services.AddHostedService<DemoMeasurementSeeder>();
+builder.Services.AddHostedService<DemoPipelineService>();
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();

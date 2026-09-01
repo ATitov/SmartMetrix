@@ -21,7 +21,18 @@ public sealed record MeasurementProcess(
     DateTimeOffset? StageDeadline,
     string? FailureReason,
     IReadOnlyList<MeasurementTransition> Transitions,
-    IReadOnlySet<Guid> ProcessedCommands);
+    HashSet<Guid> ProcessedCommands,
+    double? D10 = null,
+    double? D20 = null,
+    double? D50 = null,
+    double? D80 = null,
+    double? D90 = null,
+    double? Confidence = null,
+    int? BlockCount = null,
+    double? OversizeFraction = null,
+    double? Coverage = null,
+    string? AlgorithmVersion = null,
+    bool IsTestData = false);
 
 public sealed class InvalidMeasurementTransitionException(MeasurementStatus from, MeasurementStatus to)
     : InvalidOperationException($"Transition from {from} to {to} is not allowed.");

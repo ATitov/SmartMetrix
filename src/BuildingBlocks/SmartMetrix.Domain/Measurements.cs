@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SmartMetrix.Domain;
 
 public readonly record struct MeasurementId(Guid Value)
@@ -6,6 +8,7 @@ public readonly record struct MeasurementId(Guid Value)
     public override string ToString() => Value.ToString();
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<MeasurementStatus>))]
 public enum MeasurementStatus
 {
     Requested,

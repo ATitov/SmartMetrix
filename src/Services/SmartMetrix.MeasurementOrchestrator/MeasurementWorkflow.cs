@@ -8,6 +8,9 @@ public sealed class MeasurementWorkflowOptions
     public const string SectionName = "MeasurementWorkflow";
     public int StageTimeoutSeconds { get; set; } = 300;
     public int TimeoutScanSeconds { get; set; } = 5;
+    public bool SeedDemoData { get; set; }
+    public bool RunDemoPipeline { get; set; }
+    public int DemoStageDelaySeconds { get; set; } = 4;
 }
 
 public sealed class MeasurementWorkflow(IMeasurementStore store, TimeProvider clock, IOptions<MeasurementWorkflowOptions> options)
