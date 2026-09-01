@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
@@ -20,6 +21,8 @@ public static class ServiceDefaultsExtensions
 {
     public static WebApplicationBuilder AddSmartMetrixServiceDefaults(this WebApplicationBuilder builder)
     {
+        Console.InputEncoding = Encoding.UTF8;
+        Console.OutputEncoding = Encoding.UTF8;
         builder.Configuration[$"{SmartMetrixServiceOptions.SectionName}:ServiceName"] ??=
             builder.Environment.ApplicationName;
 
@@ -46,6 +49,8 @@ public static class ServiceDefaultsExtensions
                 var options = services.GetRequiredService<IOptions<SmartMetrixServiceOptions>>().Value;
                 client.Timeout = options.HttpClientTimeout;
             }));
+
+        AddFileLogging(builder);
 
         AddOpenTelemetry(builder);
         return builder;
@@ -80,6 +85,15 @@ public static class ServiceDefaultsExtensions
             Predicate = _ => true
         });
         return app;
+    }
+
+    private static void AddFileLogging(WebApplicationBuilder builder)
+    {
+        var directory = builder.Configuration["SmartMetrix:FileLogging:Directory"];
+        if (string.IsNullOrWhiteSpace(directory)) return;
+
+        var serviceName = builder.Configuration[$"{SmartMetrixServiceOptions.SectionName}:ServiceName"]!;
+        builder.Logging.AddProvider(new JsonFileLoggerProvider(directory, serviceName));
     }
 
     private static void AddOpenTelemetry(WebApplicationBuilder builder)

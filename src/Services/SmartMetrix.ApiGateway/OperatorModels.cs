@@ -7,6 +7,7 @@ public static class OperatorRoles
 {
     public const string Operator = "operator";
     public const string Engineer = "engineer";
+    public const string Administrator = "administrator";
 }
 
 public static class OperatorPolicies
@@ -14,6 +15,7 @@ public static class OperatorPolicies
     public const string View = "operator.view";
     public const string Command = "operator.command";
     public const string DangerousCommand = "operator.dangerous-command";
+    public const string Administration = "operator.administration";
 }
 
 public sealed class OperatorApiOptions
@@ -23,6 +25,11 @@ public sealed class OperatorApiOptions
     public List<MonitoredComponent> Components { get; set; } = [];
     public Dictionary<string, string> ApiKeys { get; set; } = new(StringComparer.Ordinal);
     public string AuditPath { get; set; } = "data/operator-audit.jsonl";
+    public string LogRoot { get; set; } = "C:\\DEPLOY_LOG";
+    public string RuntimeConfigPath { get; set; } = "data/runtime-config.json";
+    public string UserStorePath { get; set; } = "data/users.json";
+    public string? BootstrapAdminPassword { get; set; }
+    public string DataProtectionPath { get; set; } = "data/protection-keys";
 }
 
 public sealed class MonitoredComponent

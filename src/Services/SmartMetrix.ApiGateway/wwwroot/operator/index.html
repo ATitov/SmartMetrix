@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SmartMetrix — Оператор</title>
+  <link rel="stylesheet" href="/assets/smartmetrix.css"><link rel="stylesheet" href="/assets/operations.css">
+</head>
+<body data-mode="operator">
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><div class="mark">SM</div><div><b>SmartMetrix</b><small>Edge measurement</small></div></div>
+    <nav><a class="active" href="/operator/">Оператор</a><a href="/engineer/">Инженер</a></nav>
+    <div class="rail-footer muted">Автообновление · 10 сек</div>
+  </aside>
+  <main class="workspace">
+    <header class="topbar">
+      <div><div class="eyebrow">ОПЕРАТОРСКИЙ КОНТУР</div><h1>Контроль измерений</h1><div id="freshness" class="freshness">Ожидание данных</div></div>
+      <div class="controls"><input id="apiKey" type="hidden"><span id="currentUser" class="muted"></span><button class="button" id="logout">Выйти</button><button class="button" id="refresh">Обновить</button><button class="button primary" id="start">Новое измерение</button></div>
+    </header>
+    <div id="error" class="card error" role="alert" hidden></div>
+    <section class="hero">
+      <article class="card" id="systemState"><div class="muted">Загрузка состояния…</div></article>
+      <article class="card"><div class="caption">Активное измерение</div><div class="metric compact" id="activeMeasurement">—</div><div class="muted">Полный цикл от захвата до геопривязки</div></article>
+    </section>
+    <section class="kpis" id="kpis" aria-label="Сводка измерений"></section>
+    <section class="grid" id="components" aria-label="Компоненты системы"></section>
+    <section class="section">
+      <div class="section-head"><div><h2>Последние измерения</h2><span id="resultCount" class="muted"></span></div><div class="toolbar"><button class="button" id="exportCsv">CSV-отчёт</button><button class="button" id="printReport">Печать / PDF</button><label class="filter">Поиск<input id="measurementSearch" type="search" placeholder="ID или статус"></label><label class="filter">Статус<select id="statusFilter"><option value="">Все</option></select></label></div></div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Статус</th><th>Обновлено</th><th>D50 / D80</th><th>Confidence</th><th></th></tr></thead><tbody id="measurements"></tbody></table></div>
+    </section>
+  </main>
+</div>
+<dialog id="startDialog"><form class="form" id="startForm"><h2>Новое измерение</h2><label>Экскаватор<input name="excavatorId" required placeholder="EXC-01"></label><label>Система координат<input name="coordinateSystemId" required placeholder="quarry:local"></label><label>Причина<input name="reason" required value="Ручной запуск оператором"></label><div class="actions"><button class="button" type="button" data-close="startDialog">Отмена</button><button class="button primary" type="submit">Запустить</button></div></form></dialog>
+<dialog id="detailDialog"><h2>Детали измерения</h2><div id="resultVisual"></div><pre id="detailJson"></pre><div class="actions"><button class="button" data-close="detailDialog">Закрыть</button></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="/assets/smartmetrix.js"></script>
+</body>
+</html>

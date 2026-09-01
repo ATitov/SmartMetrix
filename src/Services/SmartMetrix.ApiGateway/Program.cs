@@ -1,5 +1,8 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using SmartMetrix.ApiGateway;
 using SmartMetrix.ServiceDefaults;
@@ -8,22 +11,114 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
 builder.Services.AddOptions<OperatorApiOptions>()
     .Bind(builder.Configuration.GetSection(OperatorApiOptions.SectionName));
-builder.Services.AddAuthentication(ApiKeyAuthenticationHandler.SchemeName)
+var protectionPath = builder.Configuration[$"{OperatorApiOptions.SectionName}:DataProtectionPath"] ?? "data/protection-keys";
+if (!Path.IsPathRooted(protectionPath)) protectionPath = Path.Combine(builder.Environment.ContentRootPath, protectionPath);
+Directory.CreateDirectory(protectionPath);
+var dataProtection = builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(protectionPath))
+    .SetApplicationName("SmartMetrix.ApiGateway");
+if (OperatingSystem.IsWindows()) dataProtection.ProtectKeysWithDpapi(true);
+
+const string combinedScheme = "SmartMetrixAuth";
+const string cookieScheme = "SmartMetrixCookie";
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = combinedScheme;
+        options.DefaultChallengeScheme = combinedScheme;
+    })
+    .AddPolicyScheme(combinedScheme, combinedScheme, options => options.ForwardDefaultSelector = context =>
+        context.Request.Headers.ContainsKey("X-API-Key") ? ApiKeyAuthenticationHandler.SchemeName : cookieScheme)
     .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, _ => { });
+builder.Services.AddAuthentication().AddCookie(cookieScheme, options =>
+{
+    options.LoginPath = "/login/";
+    options.AccessDeniedPath = "/forbidden/";
+    options.Cookie.Name = "SmartMetrix.Session";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+    options.Events.OnRedirectToLogin = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api")) context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        else context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api")) context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        else context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+});
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(OperatorPolicies.View, policy => policy.RequireRole(OperatorRoles.Operator, OperatorRoles.Engineer))
-    .AddPolicy(OperatorPolicies.Command, policy => policy.RequireRole(OperatorRoles.Operator, OperatorRoles.Engineer))
-    .AddPolicy(OperatorPolicies.DangerousCommand, policy => policy.RequireRole(OperatorRoles.Engineer));
+    .AddPolicy(OperatorPolicies.View, policy => policy.RequireRole(OperatorRoles.Operator, OperatorRoles.Engineer, OperatorRoles.Administrator))
+    .AddPolicy(OperatorPolicies.Command, policy => policy.RequireRole(OperatorRoles.Operator, OperatorRoles.Engineer, OperatorRoles.Administrator))
+    .AddPolicy(OperatorPolicies.DangerousCommand, policy => policy.RequireRole(OperatorRoles.Engineer, OperatorRoles.Administrator))
+    .AddPolicy(OperatorPolicies.Administration, policy => policy.RequireRole(OperatorRoles.Administrator));
 builder.Services.AddHttpClient<OperatorBackendClient>();
 builder.Services.AddSingleton<IAuditStore, JsonAuditStore>();
+builder.Services.AddSingleton<EngineeringTools>();
+builder.Services.AddSingleton<UserAccountStore>();
+builder.Services.AddHostedService<UserStoreInitializer>();
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapSmartMetrixDefaultEndpoints();
 
-app.MapGet("/operator", () => Results.Content(OperatorDashboard.Html, "text/html; charset=utf-8"));
+app.MapPost("/api/auth/login", async (LoginRequest request, HttpContext context, UserAccountStore users, CancellationToken ct) =>
+{
+    var user = await users.AuthenticateAsync(request.Username, request.Password, ct);
+    if (user is null) return Results.Problem("Неверный логин или пароль, учетная запись отключена либо временно заблокирована.", statusCode: 401);
+    var identity = new ClaimsIdentity([
+        new Claim(ClaimTypes.Name, user.Username),
+        new Claim(ClaimTypes.GivenName, user.DisplayName),
+        new Claim(ClaimTypes.Role, user.Role)
+    ], cookieScheme);
+    await context.SignInAsync(cookieScheme, new ClaimsPrincipal(identity), new AuthenticationProperties
+    {
+        IsPersistent = false,
+        AllowRefresh = true,
+        ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+    });
+    return Results.Ok(new { user.Username, user.DisplayName, user.Role });
+}).AllowAnonymous();
+app.MapPost("/api/auth/logout", async (HttpContext context) =>
+{
+    await context.SignOutAsync(cookieScheme);
+    return Results.NoContent();
+}).RequireAuthorization();
+app.MapGet("/api/auth/me", (ClaimsPrincipal user) => Results.Ok(new
+{
+    Username = user.Identity?.Name,
+    DisplayName = user.FindFirstValue(ClaimTypes.GivenName) ?? user.Identity?.Name,
+    Role = user.FindFirstValue(ClaimTypes.Role)
+})).RequireAuthorization();
+
+var administration = app.MapGroup("/api/admin").RequireAuthorization(OperatorPolicies.Administration);
+administration.MapGet("/users", (UserAccountStore users, CancellationToken ct) => users.ListAsync(ct));
+administration.MapPost("/users", async (CreateUserRequest request, UserAccountStore users, CancellationToken ct) =>
+{
+    try { await users.AddAsync(request, ct); return Results.Created($"/api/admin/users/{request.Username}", null); }
+    catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
+    catch (InvalidOperationException exception) { return Results.Conflict(new { error = exception.Message }); }
+});
+administration.MapPut("/users/{username}/enabled/{enabled:bool}", async (string username, bool enabled, UserAccountStore users, CancellationToken ct) =>
+{
+    try { await users.SetEnabledAsync(username, enabled, ct); return Results.NoContent(); }
+    catch (KeyNotFoundException exception) { return Results.NotFound(new { error = exception.Message }); }
+});
+administration.MapPut("/users/{username}/password", async (string username, ResetPasswordRequest request, UserAccountStore users, CancellationToken ct) =>
+{
+    try { await users.ResetPasswordAsync(username, request.Password, ct); return Results.NoContent(); }
+    catch (ArgumentException exception) { return Results.BadRequest(new { error = exception.Message }); }
+    catch (KeyNotFoundException exception) { return Results.NotFound(new { error = exception.Message }); }
+});
 
 var api = app.MapGroup("/api/operator").RequireAuthorization(OperatorPolicies.View);
 api.MapGet("/status", (OperatorBackendClient backend, CancellationToken ct) => backend.GetStatusAsync(ct));
@@ -32,6 +127,14 @@ api.MapGet("/measurements/{id:guid}", (Guid id, OperatorBackendClient backend, C
     backend.GetMeasurementAsync(id, ct));
 api.MapGet("/audit", (IAuditStore audit, CancellationToken ct) => audit.ReadAsync(ct))
     .RequireAuthorization(OperatorPolicies.DangerousCommand);
+api.MapGet("/engineering/system", (EngineeringTools tools) => Results.Ok(tools.SystemSnapshot()))
+    .RequireAuthorization(OperatorPolicies.DangerousCommand);
+api.MapGet("/engineering/logs", (string? service, string? level, int? take, EngineeringTools tools) =>
+    Results.Ok(tools.ReadLogs(service, level, take ?? 100))).RequireAuthorization(OperatorPolicies.DangerousCommand);
+api.MapGet("/engineering/config", (EngineeringTools tools, CancellationToken ct) => tools.GetConfigurationAsync(ct))
+    .RequireAuthorization(OperatorPolicies.DangerousCommand);
+api.MapPut("/engineering/config", (Dictionary<string, string> values, EngineeringTools tools, CancellationToken ct) =>
+    tools.SaveConfigurationAsync(values, ct)).RequireAuthorization(OperatorPolicies.DangerousCommand);
 
 api.MapPost("/measurements", async (StartOperatorMeasurement request, HttpContext context,
     OperatorBackendClient backend, IAuditStore audit, CancellationToken ct) =>

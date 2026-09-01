@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SmartMetrix — вход</title>
+  <link rel="stylesheet" href="/assets/smartmetrix.css">
+  <link rel="stylesheet" href="/assets/operations.css">
+  <style>
+    body{display:grid;place-items:center;min-height:100vh;background:#0d1517}.login{width:min(420px,calc(100% - 32px));padding:32px}.login h1{margin:.3rem 0 1rem}.login form{display:grid;gap:16px}.login label{display:grid;gap:7px}.login input{width:100%}.login .button{justify-content:center}.login-error{color:#ff9c90;min-height:1.4em}
+  </style>
+</head>
+<body>
+  <main class="card login">
+    <div class="eyebrow">SMARTMETRIX</div>
+    <h1>Вход в систему</h1>
+    <p class="muted">Используйте персональную учетную запись. Действия будут записаны в журнал аудита.</p>
+    <form id="loginForm">
+      <label>Логин<input name="username" autocomplete="username" required autofocus></label>
+      <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+      <div id="loginError" class="login-error" role="alert" aria-live="polite"></div>
+      <button class="button primary" type="submit">Войти</button>
+    </form>
+  </main>
+  <script>
+    const form=document.querySelector('#loginForm');
+    form.addEventListener('submit',async event=>{
+      event.preventDefault(); const button=event.submitter; const error=document.querySelector('#loginError');
+      button.disabled=true; error.textContent='';
+      try {
+        const data=Object.fromEntries(new FormData(form));
+        const response=await fetch('/api/auth/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+        if(!response.ok) throw new Error('Неверный логин или пароль. После 5 ошибок вход блокируется на 15 минут.');
+        const identity=await response.json();
+        const requested=new URLSearchParams(location.search).get('return');
+        const safe=requested==='/operator/'||requested==='/engineer/' ? requested : null;
+        location.assign(safe || (identity.role==='operator' ? '/operator/' : '/engineer/'));
+      } catch(exception) { error.textContent=exception.message; button.disabled=false; }
+    });
+  </script>
+</body>
+</html>
