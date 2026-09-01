@@ -103,10 +103,19 @@ services:
     volumes:
       - /usr/local/cuda:/usr/local/cuda:ro
       - /opt/nvidia:/opt/nvidia:ro
+      - ${ARENA_SDK_ROOT:-/opt/arena}:/opt/arena:ro
+      - ${SMARTMETRIX_NATIVE_ROOT:-/opt/smartmetrix/native}:/app/native:ro
     environment:
       <<: *common-environment
       Camera__Adapter: ${CAMERA_ADAPTER:-Arena}
       Camera__StorageServiceUrl: http://storage-service:8080
+      Camera__CameraASerialNumber: ${CAMERA_A_SERIAL:?set CAMERA_A_SERIAL}
+      Camera__CameraBSerialNumber: ${CAMERA_B_SERIAL:?set CAMERA_B_SERIAL}
+      Camera__CameraCSerialNumber: ${CAMERA_C_SERIAL:?set CAMERA_C_SERIAL}
+      Camera__TriggerSource: ${CAMERA_TRIGGER_SOURCE:-Line0}
+      Camera__TriggerActivation: ${CAMERA_TRIGGER_ACTIVATION:-RisingEdge}
+      Camera__PixelFormat: ${CAMERA_PIXEL_FORMAT:-Mono8}
+      LD_LIBRARY_PATH: /app/native:/opt/arena/lib64:/opt/arena/lib
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
     depends_on:
@@ -118,10 +127,16 @@ services:
     build: { <<: *build, args: { SERVICE: SmartMetrix.DepthService } }
     runtime: nvidia
     gpus: all
+    volumes:
+      - ${SMARTMETRIX_NATIVE_ROOT:-/opt/smartmetrix/native}:/app/native:ro
+      - /usr/local/cuda:/usr/local/cuda:ro
+      - /opt/nvidia/vpi2:/opt/nvidia/vpi2:ro
     environment:
       <<: *common-environment
-      Depth__Backend: ${DEPTH_BACKEND:-Cpu}
+      Depth__Backend: ${DEPTH_BACKEND:-Native}
+      Depth__NativeProvider: ${DEPTH_NATIVE_PROVIDER:-OpenCvCuda}
       Depth__StorageBaseUrl: http://storage-service:8080
+      LD_LIBRARY_PATH: /app/native:/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     depends_on:

@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.20)
+project(smartmetrix_arena LANGUAGES CXX)
+
+option(SMARTMETRIX_WITH_ARENA "Build against the LUCID Arena SDK" OFF)
+set(ARENA_SDK_ROOT "" CACHE PATH "Arena SDK root containing include/ArenaApi.h and lib64/libarena.so")
+
+add_library(smartmetrix_arena SHARED smartmetrix_arena.cpp)
+target_compile_features(smartmetrix_arena PRIVATE cxx_std_17)
+target_compile_definitions(smartmetrix_arena PRIVATE SMARTMETRIX_ARENA_EXPORTS)
+target_include_directories(smartmetrix_arena PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set_target_properties(smartmetrix_arena PROPERTIES VERSION 2.0.0 SOVERSION 2)
+
+if(SMARTMETRIX_WITH_ARENA)
+  if(NOT ARENA_SDK_ROOT)
+    message(FATAL_ERROR "ARENA_SDK_ROOT is required when SMARTMETRIX_WITH_ARENA=ON")
+  endif()
+  find_path(ARENA_INCLUDE_DIR ArenaApi.h PATHS "${ARENA_SDK_ROOT}/include" PATH_SUFFIXES Arena NO_DEFAULT_PATH REQUIRED)
+  if(WIN32)
+    find_library(ARENA_LIBRARY NAMES Arena_v140 PATHS "${ARENA_SDK_ROOT}/lib64/Arena" NO_DEFAULT_PATH REQUIRED)
+  else()
+    find_library(ARENA_LIBRARY NAMES arena PATHS "${ARENA_SDK_ROOT}/lib64" "${ARENA_SDK_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
+  endif()
+  target_compile_definitions(smartmetrix_arena PRIVATE SMARTMETRIX_WITH_ARENA=1)
+  target_include_directories(smartmetrix_arena PRIVATE "${ARENA_INCLUDE_DIR}")
+  if(WIN32)
+    target_include_directories(smartmetrix_arena PRIVATE
+      "${ARENA_SDK_ROOT}/include"
+      "${ARENA_SDK_ROOT}/include/GenICam")
+  endif()
+  target_link_libraries(smartmetrix_arena PRIVATE "${ARENA_LIBRARY}")
+  set_target_properties(smartmetrix_arena PROPERTIES BUILD_RPATH "$ORIGIN" INSTALL_RPATH "$ORIGIN")
+endif()
+
+include(GNUInstallDirs)
+install(TARGETS smartmetrix_arena LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES smartmetrix_arena.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

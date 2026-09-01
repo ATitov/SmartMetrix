@@ -6,6 +6,23 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class CameraCaptureTests
 {
     [Fact]
+    public async Task ArenaRequiresThreeUniqueConfiguredSerialNumbersBeforeLoadingNativeLibrary()
+    {
+        var adapter = new ArenaCameraAdapter(Options.Create(new CameraOptions
+        {
+            CameraASerialNumber = "same",
+            CameraBSerialNumber = "same",
+            CameraCSerialNumber = "same"
+        }));
+
+        var error = await Assert.ThrowsAsync<CameraCaptureException>(
+            () => adapter.CaptureAsync(CancellationToken.None));
+
+        Assert.Equal("NotConfigured", error.Code);
+        Assert.Contains("unique", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SimulatorReturnsExactlyThreeDeterministicSynchronizedFrames()
     {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));

@@ -12,13 +12,23 @@ public interface ICameraAdapter
 public sealed class ArenaCameraAdapter(IOptions<CameraOptions> configured) : ICameraAdapter, IDisposable
 {
     private const string LibraryName = "smartmetrix_arena";
+    private const int AbiVersion = 2;
     private readonly CameraOptions options = configured.Value;
     private nint context;
+    private readonly object sync = new();
     public string Name => "Arena";
 
     public Task<IReadOnlyList<CapturedFrame>> CaptureAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            return CaptureCore();
+        }
+    }
+
+    private Task<IReadOnlyList<CapturedFrame>> CaptureCore()
+    {
         try
         {
             EnsureInitialized();
@@ -64,10 +74,21 @@ public sealed class ArenaCameraAdapter(IOptions<CameraOptions> configured) : ICa
     private void EnsureInitialized()
     {
         if (context != 0) return;
+        var serials = new[] { options.CameraASerialNumber, options.CameraBSerialNumber, options.CameraCSerialNumber };
+        if (serials.Any(string.IsNullOrWhiteSpace) || serials.Distinct(StringComparer.Ordinal).Count() != 3)
+            throw new CameraCaptureException("NotConfigured", "Camera A/B/C serial numbers must be configured and unique.", 503);
         var configuration = new NativeConfiguration
         {
+            AbiVersion = AbiVersion,
             ExposureMicroseconds = options.ExposureMicroseconds,
-            RequiredCameraCount = 3
+            RequiredCameraCount = 3,
+            CaptureTimeoutMilliseconds = options.CaptureTimeoutMilliseconds,
+            CameraASerialNumber = options.CameraASerialNumber,
+            CameraBSerialNumber = options.CameraBSerialNumber,
+            CameraCSerialNumber = options.CameraCSerialNumber,
+            TriggerSource = options.TriggerSource,
+            TriggerActivation = options.TriggerActivation,
+            PixelFormat = options.PixelFormat
         };
         var status = Native.Create(ref configuration, out context);
         if (status != ArenaStatus.Ok) throw MapStatus(status);
@@ -83,13 +104,29 @@ public sealed class ArenaCameraAdapter(IOptions<CameraOptions> configured) : ICa
 
     public void Dispose()
     {
-        if (context == 0) return;
-        Native.Destroy(context);
-        context = 0;
+        lock (sync)
+        {
+            if (context == 0) return;
+            Native.Destroy(context);
+            context = 0;
+        }
     }
 
     private enum ArenaStatus { Ok = 0, NotConfigured = 1, FrameMissing = 2, Timeout = 3 }
-    [StructLayout(LayoutKind.Sequential)] private struct NativeConfiguration { public double ExposureMicroseconds; public int RequiredCameraCount; }
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    private struct NativeConfiguration
+    {
+        public int AbiVersion;
+        public double ExposureMicroseconds;
+        public int RequiredCameraCount;
+        public int CaptureTimeoutMilliseconds;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string CameraASerialNumber;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string CameraBSerialNumber;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string CameraCSerialNumber;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string TriggerSource;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string TriggerActivation;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string PixelFormat;
+    }
     [StructLayout(LayoutKind.Sequential)] private struct NativeFrame { public nint CameraId; public long FrameId; public long HardwareTimestampNanoseconds; public nint Data; public nuint Size; public nint ContentType; }
     [StructLayout(LayoutKind.Sequential)] private struct NativeFrameSet { public nint Frames; public int Count; }
     private static class Native

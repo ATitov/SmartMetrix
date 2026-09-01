@@ -7,7 +7,14 @@ public sealed class CameraOptions
     public const string SectionName = "Camera";
     [Required] public string Adapter { get; init; } = "Arena";
     [Range(1, 60_000)] public double ExposureMicroseconds { get; init; } = 5_000;
+    [Range(1, 120_000)] public int CaptureTimeoutMilliseconds { get; init; } = 10_000;
     [Range(0, long.MaxValue)] public long MaximumTimestampSkewNanoseconds { get; init; } = 1_000_000;
+    [Required] public string TriggerSource { get; init; } = "Line0";
+    [Required] public string TriggerActivation { get; init; } = "RisingEdge";
+    [Required] public string PixelFormat { get; init; } = "Mono8";
+    [Required] public string CameraASerialNumber { get; init; } = string.Empty;
+    [Required] public string CameraBSerialNumber { get; init; } = string.Empty;
+    [Required] public string CameraCSerialNumber { get; init; } = string.Empty;
     [Required] public string StorageServiceUrl { get; init; } = "http://localhost:5105";
     [Required] public string SimulatorFrameDirectory { get; init; } = "simulator-frames";
 }

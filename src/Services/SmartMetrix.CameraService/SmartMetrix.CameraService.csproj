@@ -6,7 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="native\smartmetrix_arena.h" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="native\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="simulator-frames\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

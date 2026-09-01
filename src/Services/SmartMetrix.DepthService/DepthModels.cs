@@ -46,12 +46,14 @@ public sealed class DepthOptions
 {
     public const string SectionName = "Depth";
     public string Backend { get; set; } = "Cpu";
+    public string NativeProvider { get; set; } = "OpenCvCuda";
     public int MinimumDisparity { get; set; } = 1;
     public int MaximumDisparity { get; set; } = 96;
     public int MatchRadius { get; set; } = 2;
     public float LeftRightTolerancePixels { get; set; } = 1.5f;
     public int MinimumSpeckleSize { get; set; } = 8;
     public float MinimumConfidence { get; set; } = 0.15f;
+    public int UniquenessRatio { get; set; } = 10;
     public double NearDistanceMetres { get; set; } = 1.0;
     public double FarDistanceMetres { get; set; } = 20.0;
     public string StorageBaseUrl { get; set; } = "http://storage-service:8080";

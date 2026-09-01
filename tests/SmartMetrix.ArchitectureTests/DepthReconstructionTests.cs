@@ -50,7 +50,7 @@ public sealed class DepthReconstructionTests
     {
         var frame = new GrayFrame("A", 1, 1, [0]);
         Assert.Throws<StereoBackendNotConfiguredException>(() =>
-            new NativeStereoBackend().Compute(frame, frame, Pair("A", "B", 0.7)));
+            new NativeStereoBackend(Options.Create(new DepthOptions())).Compute(frame, frame, Pair("A", "B", 0.7)));
     }
 
     private static GrayFrame Frame(string id, byte[] source, int shift)
