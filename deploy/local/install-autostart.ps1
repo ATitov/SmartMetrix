@@ -1,9 +1,9 @@
-# Run from an elevated PowerShell session.
 $ErrorActionPreference = 'Stop'
 $root = 'C:\DEPLOY\SmartMetrix'
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $startAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$root\start.ps1`""
-$startupTrigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$startupTrigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+$principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName 'SmartMetrix-Startup' -Action $startAction -Trigger $startupTrigger -Principal $principal -Force -ErrorAction Stop | Out-Null
 
 $watchdogAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$root\watchdog.ps1`""

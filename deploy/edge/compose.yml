@@ -89,6 +89,20 @@ services:
     <<: *service
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-orchestrator:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.MeasurementOrchestrator } }
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/orchestrator:/app/data"]
+    environment:
+      <<: *common-environment
+      Pipeline__Enabled: "true"
+      Pipeline__RigId: ${SMARTMETRIX_RIG_ID:?set SMARTMETRIX_RIG_ID}
+      Pipeline__CalibrationUrl: http://calibration-service:8080
+      Pipeline__CameraUrl: http://camera-service:8080
+      Pipeline__QualityUrl: http://quality-service:8080
+      Pipeline__DepthUrl: http://depth-service:8080
+      Pipeline__SegmentationUrl: http://segmentation-service:8080
+      Pipeline__AnalysisUrl: http://block-analysis-service:8080
+      Pipeline__PositioningUrl: http://local-positioning-service:8080
+      Pipeline__GeoreferenceUrl: http://georeference-service:8080
+      Pipeline__StorageUrl: http://storage-service:8080
 
   camera-service:
     <<: *service
@@ -105,6 +119,7 @@ services:
       - /opt/nvidia:/opt/nvidia:ro
       - ${ARENA_SDK_ROOT:-/opt/arena}:/opt/arena:ro
       - ${SMARTMETRIX_NATIVE_ROOT:-/opt/smartmetrix/native}:/app/native:ro
+      - ${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/camera:/app/data
     environment:
       <<: *common-environment
       Camera__Adapter: ${CAMERA_ADAPTER:-Arena}

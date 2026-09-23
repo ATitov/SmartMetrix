@@ -8,7 +8,8 @@ public sealed record SegmentationResult(
     SmartMetrix.Contracts.SegmentationCreated Event,
     Uri ConfidenceMapUri,
     bool LowConfidence,
-    IReadOnlyDictionary<string, int> ClassPixelCounts);
+    IReadOnlyDictionary<string, int> ClassPixelCounts,
+    bool IsTestData = true);
 
 public sealed class SegmentationOptions
 {

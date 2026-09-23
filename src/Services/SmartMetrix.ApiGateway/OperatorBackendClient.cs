@@ -40,13 +40,20 @@ public sealed class OperatorBackendClient(HttpClient httpClient, IOptions<Operat
         if (!TryGetOrchestrator(out var baseUri)) return Task.FromResult(NotConfiguredResponse());
         var payload = new
         {
-            commandId = Guid.CreateVersion7(),
+            commandId = request.CommandId ?? Guid.CreateVersion7(),
             request.MeasurementId,
             request.ExcavatorId,
             request.CoordinateSystemId,
             request.Reason
         };
         return httpClient.PostAsJsonAsync(new Uri(baseUri, "measurements"), payload, JsonOptions, cancellationToken);
+    }
+
+    public async Task<IResult> GetStageAsync(Guid id, string stage, CancellationToken ct)
+    {
+        if (!TryGetOrchestrator(out var baseUri)) return NotConfigured();
+        using var response = await httpClient.GetAsync(new Uri(baseUri, $"measurements/{id}/stages/{Uri.EscapeDataString(stage)}"), ct);
+        return await OperatorResults.FromUpstreamAsync(response, ct);
     }
 
     public Task<HttpResponseMessage> CommandAsync(Guid id, string command, OperatorCommand request, CancellationToken cancellationToken)

@@ -40,7 +40,12 @@ public sealed record ReconstructionResult(
     PointCloudCreated Event,
     int ValidPointCount,
     int InvalidPixelCount,
-    IReadOnlyDictionary<string, int> SelectedBaselines);
+    IReadOnlyDictionary<string, int> SelectedBaselines,
+    Uri? OrganizedCloudUri = null,
+    string? Backend = null);
+
+public sealed record OrganizedDepthPoint(double XMetres, double YMetres, double ZMetres, double DepthConfidence);
+public sealed record OrganizedDepthCloud(int Width, int Height, IReadOnlyList<OrganizedDepthPoint> Points);
 
 public sealed class DepthOptions
 {

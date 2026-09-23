@@ -40,7 +40,9 @@ public sealed record CaptureResponse(
     IReadOnlyList<StoredFrame> Frames,
     long TimestampSkewNanoseconds,
     string Adapter,
-    string? CalibrationId);
+    string? CalibrationId,
+    DateTimeOffset? ExposedAt = null,
+    string PixelFormat = "Mono8");
 
 public sealed class CameraCaptureException(string code, string message, int statusCode = 422) : Exception(message)
 {

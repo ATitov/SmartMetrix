@@ -45,7 +45,7 @@
     </section>
   </main>
 </div>
-<dialog id="detailDialog"><h2>Диагностические данные</h2><div id="resultVisual"></div><pre id="detailJson"></pre><div class="actions"><button class="button" data-close="detailDialog">Закрыть</button></div></dialog>
+<dialog id="detailDialog"><h2>Диагностические данные</h2><div id="resultVisual"></div><div id="pipelineStages"></div><pre id="detailJson"></pre><div class="actions"><button class="button" data-close="detailDialog">Закрыть</button></div></dialog>
 <dialog id="commandDialog"><form class="form" id="commandForm"><h2 id="commandTitle">Подтверждение команды</h2><p id="commandTarget" class="muted"></p><input type="hidden" name="id"><input type="hidden" name="command"><input type="hidden" name="version"><label>Причина выполнения<input name="reason" required minlength="5" placeholder="Укажите причину"></label><div class="warning">Команда изменит состояние измерения и будет записана в аудит.</div><div class="actions"><button class="button" type="button" data-close="commandDialog">Отмена</button><button class="button danger" type="submit">Подтвердить</button></div></form></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="/assets/smartmetrix.js"></script>

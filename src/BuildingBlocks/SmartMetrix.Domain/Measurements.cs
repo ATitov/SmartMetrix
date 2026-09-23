@@ -19,7 +19,9 @@ public enum MeasurementStatus
     Georeferencing,
     Completed,
     Rejected,
-    Failed
+    Failed,
+    Segmenting,
+    Persisting
 }
 
 public sealed record Measurement(

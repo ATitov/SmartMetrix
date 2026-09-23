@@ -1,10 +1,11 @@
 $pidRoot = 'C:\DEPLOY\SmartMetrix\runtime\pids'
+. (Join-Path $PSScriptRoot 'process-state.ps1')
 $configuration = Import-PowerShellDataFile (Join-Path $PSScriptRoot 'services.psd1')
 $allItems = @($configuration.Infrastructure | ForEach-Object { @{ Name=$_.Name; Port=$_.HealthPort } }) + @($configuration.Services)
 $rows = foreach ($service in $allItems) {
     $pidFile = Join-Path $pidRoot "$($service.Name).pid"
-    $processId = if (Test-Path $pidFile) { [int](Get-Content $pidFile) } else { 0 }
-    $processRunning = $processId -gt 0 -and $null -ne (Get-Process -Id $processId -ErrorAction SilentlyContinue)
+    $state = Read-SmartMetrixProcessState -Path $pidFile
+    $processRunning = $null -ne $state -and (Test-SmartMetrixProcessState -State $state)
     $health = 'stopped'
     if ($processRunning) {
         try {
@@ -13,6 +14,6 @@ $rows = foreach ($service in $allItems) {
             $health = if ($response.StatusCode -eq 200) { 'healthy' } else { "http-$($response.StatusCode)" }
         } catch { $health = 'starting/unhealthy' }
     }
-    [pscustomobject]@{ Service = $service.Name; Port = $service.Port; PID = if ($processRunning) { $processId } else { '-' }; Status = $health }
+    [pscustomobject]@{ Service = $service.Name; Port = $service.Port; PID = if ($processRunning) { $state.Pid } else { '-' }; Status = $health }
 }
 $rows | Format-Table -AutoSize

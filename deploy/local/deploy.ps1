@@ -30,7 +30,7 @@ if (-not $nats -or -not (Test-Path $minio)) { throw 'Local NATS/MinIO binaries a
 Copy-Item -LiteralPath $nats.FullName -Destination (Join-Path $infrastructureRoot 'nats-server.exe') -Force
 Copy-Item -LiteralPath $minio -Destination (Join-Path $infrastructureRoot 'minio.exe') -Force
 
-foreach ($file in 'start.ps1','stop.ps1','status.ps1','services.psd1','deploy.ps1','watchdog.ps1','rotate-logs.ps1','install-autostart.ps1') {
+foreach ($file in 'start.ps1','stop.ps1','status.ps1','services.psd1','process-state.ps1','deploy.ps1','watchdog.ps1','rotate-logs.ps1','install-autostart.ps1') {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $Destination $file) -Force
 }
 

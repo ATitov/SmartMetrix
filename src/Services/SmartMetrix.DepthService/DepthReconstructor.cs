@@ -34,6 +34,7 @@ public sealed class HttpDepthArtifactStore(HttpClient client, IOptions<DepthOpti
 
 public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactStore artifacts, IOptions<DepthOptions> configured)
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly DepthOptions _options = configured.Value;
 
     public async Task<ReconstructionResult> ReconstructAsync(Guid measurementId, ReconstructionRequest request, CancellationToken cancellationToken)
@@ -46,6 +47,7 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
         var width = maps[0].Map.Width;
         var height = maps[0].Map.Height;
         var points = new List<Point3>(width * height);
+        var organized = new OrganizedDepthPoint[width * height];
         var confidence = new byte[width * height];
         var selected = maps.ToDictionary(map => PairName(map.Calibration), _ => 0, StringComparer.OrdinalIgnoreCase);
         var invalid = 0;
@@ -65,7 +67,7 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
                 if (best is null || candidate.Score > best.Value.Score) best = candidate;
             }
 
-            if (best is null) { invalid++; continue; }
+            if (best is null) { organized[index] = new(0, 0, 0, 0); invalid++; continue; }
             var chosen = best.Value;
             var x = index % width;
             var y = index / width;
@@ -79,6 +81,7 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
             var rigY = rotation.Length == 9 ? rotation[3] * cameraX + rotation[4] * cameraY + rotation[5] * chosen.Depth : cameraY;
             var rigZ = rotation.Length == 9 ? rotation[6] * cameraX + rotation[7] * cameraY + rotation[8] * chosen.Depth : chosen.Depth;
             points.Add(new Point3((float)(rigX + tx), (float)(rigY + ty), (float)(rigZ + tz), chosen.Sample.Confidence));
+            organized[index] = new(rigX + tx, rigY + ty, rigZ + tz, chosen.Sample.Confidence);
             confidence[index] = (byte)Math.Clamp(MathF.Round(chosen.Sample.Confidence * 255), 1, 255);
             selected[PairName(chosen.Calibration)]++;
         }
@@ -89,7 +92,10 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
             ToPgm(width, height, confidence), cancellationToken);
         var created = new PointCloudCreated(new MeasurementId(measurementId), cloudUri, confidenceUri,
             request.Calibration.CameraRigCoordinateSystemId);
-        return new ReconstructionResult(created, points.Count, invalid, selected);
+        var organizedUri = await artifacts.PutAsync(measurementId, "depth/organized-cloud.json", "application/json",
+            JsonSerializer.SerializeToUtf8Bytes(new OrganizedDepthCloud(width, height, organized),
+                JsonOptions), cancellationToken);
+        return new ReconstructionResult(created, points.Count, invalid, selected, organizedUri, _options.Backend);
     }
 
     private static void Validate(ReconstructionRequest request)

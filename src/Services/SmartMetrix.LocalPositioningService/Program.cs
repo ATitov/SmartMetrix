@@ -6,6 +6,8 @@ builder.AddSmartMetrixServiceDefaults();
 builder.Services.Configure<PositioningOptions>(builder.Configuration.GetSection(PositioningOptions.SectionName));
 builder.Services.AddSingleton<TransformRegistry>();
 builder.Services.AddSingleton<PoseResolver>();
+builder.Services.AddSingleton<PositioningSampleBuffer>();
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.IncludeFields = true);
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
@@ -14,6 +16,12 @@ app.MapSmartMetrixDefaultEndpoints();
 app.MapPost("/api/transforms", (TransformDefinition transform, TransformRegistry registry) =>
     Results.Created($"/api/transforms/{transform.ExcavatorId}/{transform.Version}", registry.Add(transform)));
 app.MapPost("/api/poses/resolve", (PoseRequest request, PoseResolver resolver) => Results.Ok(resolver.Resolve(request)));
+app.MapPost("/api/positioning/{excavatorId}/samples", (string excavatorId, PositioningSample[] samples,
+    PositioningSampleBuffer buffer) =>
+{ buffer.Add(excavatorId, samples); return Results.Accepted(); });
+app.MapGet("/api/poses/{excavatorId}", (string excavatorId, long hardwareTimestampNanoseconds,
+    DateTimeOffset exposedAt, PositioningSampleBuffer buffer, PoseResolver resolver) =>
+    Results.Ok(resolver.Resolve(new(excavatorId, hardwareTimestampNanoseconds, exposedAt, buffer.Get(excavatorId)))));
 
 app.UseExceptionHandler(handler => handler.Run(async context =>
 {

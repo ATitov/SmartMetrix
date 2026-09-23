@@ -5,6 +5,7 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class DepthReconstructionTests
 {
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new(System.Text.Json.JsonSerializerDefaults.Web);
     [Fact]
     public async Task CpuFallbackReconstructsSyntheticMultiBaselineSceneWithinDepthBudget()
     {
@@ -36,7 +37,12 @@ public sealed class DepthReconstructionTests
 
         Assert.True(result.ValidPointCount > 2_000);
         Assert.True(result.InvalidPixelCount > 0); // Borders/occlusions have an explicit invalid marker in the confidence map.
-        Assert.Equal(2, store.Artifacts.Count);
+        Assert.Equal(3, store.Artifacts.Count);
+        var organized = System.Text.Json.JsonSerializer.Deserialize<OrganizedDepthCloud>(store.Artifacts[result.OrganizedCloudUri!],
+            JsonOptions)!;
+        Assert.Equal(width * height, organized.Points.Count);
+        Assert.Equal(result.InvalidPixelCount, organized.Points.Count(x => x.DepthConfidence == 0));
+        Assert.Equal(result.ValidPointCount, organized.Points.Count(x => x.DepthConfidence > 0));
         Assert.All(store.Artifacts.Keys, uri => Assert.True(uri.IsAbsoluteUri));
         var ply = System.Text.Encoding.ASCII.GetString(store.Artifacts.Single(x => x.Key.AbsolutePath.EndsWith(".ply")).Value);
         var depths = ply.Split('\n').SkipWhile(line => line.Trim() != "end_header").Skip(1)

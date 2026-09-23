@@ -4,6 +4,7 @@ using SmartMetrix.GeoreferenceService;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
 builder.Services.AddSingleton<Georeferencer>();
+builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.IncludeFields = true);
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();

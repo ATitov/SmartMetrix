@@ -32,7 +32,10 @@ public sealed record MeasurementProcess(
     double? OversizeFraction = null,
     double? Coverage = null,
     string? AlgorithmVersion = null,
-    bool IsTestData = false);
+    bool IsTestData = false,
+    PipelineProgress? Pipeline = null,
+    double? D95 = null,
+    IReadOnlyList<PipelineProgress>? PreviousRuns = null);
 
 public sealed class InvalidMeasurementTransitionException(MeasurementStatus from, MeasurementStatus to)
     : InvalidOperationException($"Transition from {from} to {to} is not allowed.");
@@ -48,9 +51,11 @@ public static class MeasurementStateMachine
             [MeasurementStatus.Requested] = [MeasurementStatus.Capturing, MeasurementStatus.Rejected, MeasurementStatus.Failed],
             [MeasurementStatus.Capturing] = [MeasurementStatus.QualityControl, MeasurementStatus.Rejected, MeasurementStatus.Failed],
             [MeasurementStatus.QualityControl] = [MeasurementStatus.Reconstructing, MeasurementStatus.Rejected, MeasurementStatus.Failed],
-            [MeasurementStatus.Reconstructing] = [MeasurementStatus.Analysing, MeasurementStatus.Rejected, MeasurementStatus.Failed],
+            [MeasurementStatus.Reconstructing] = [MeasurementStatus.Segmenting, MeasurementStatus.Analysing, MeasurementStatus.Rejected, MeasurementStatus.Failed],
+            [MeasurementStatus.Segmenting] = [MeasurementStatus.Analysing, MeasurementStatus.Rejected, MeasurementStatus.Failed],
             [MeasurementStatus.Analysing] = [MeasurementStatus.Georeferencing, MeasurementStatus.Rejected, MeasurementStatus.Failed],
-            [MeasurementStatus.Georeferencing] = [MeasurementStatus.Completed, MeasurementStatus.Rejected, MeasurementStatus.Failed],
+            [MeasurementStatus.Georeferencing] = [MeasurementStatus.Persisting, MeasurementStatus.Completed, MeasurementStatus.Rejected, MeasurementStatus.Failed],
+            [MeasurementStatus.Persisting] = [MeasurementStatus.Completed, MeasurementStatus.Rejected, MeasurementStatus.Failed],
             [MeasurementStatus.Rejected] = [MeasurementStatus.Requested],
             [MeasurementStatus.Failed] = [MeasurementStatus.Requested],
             [MeasurementStatus.Completed] = []

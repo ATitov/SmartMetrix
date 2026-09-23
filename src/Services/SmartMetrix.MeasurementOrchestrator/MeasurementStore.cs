@@ -22,7 +22,7 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
     {
         var path = PathFor(id);
         if (!File.Exists(path)) return null;
-        await using var stream = File.OpenRead(path);
+        await using var stream = OpenSnapshot(path);
         return await JsonSerializer.DeserializeAsync<MeasurementProcess>(stream, JsonOptions, cancellationToken);
     }
 
@@ -32,7 +32,7 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
         var result = new List<MeasurementProcess>();
         foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
         {
-            await using var stream = File.OpenRead(path);
+            await using var stream = OpenSnapshot(path);
             var item = await JsonSerializer.DeserializeAsync<MeasurementProcess>(stream, JsonOptions, cancellationToken);
             if (item is not null && item.Status is not (SmartMetrix.Domain.MeasurementStatus.Completed or SmartMetrix.Domain.MeasurementStatus.Rejected or SmartMetrix.Domain.MeasurementStatus.Failed)) result.Add(item);
         }
@@ -45,7 +45,7 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
         var result = new List<MeasurementProcess>();
         foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
         {
-            await using var stream = File.OpenRead(path);
+            await using var stream = OpenSnapshot(path);
             var item = await JsonSerializer.DeserializeAsync<MeasurementProcess>(stream, JsonOptions, cancellationToken);
             if (item is null) continue;
             var terminal = item.Status is SmartMetrix.Domain.MeasurementStatus.Completed or
@@ -83,6 +83,7 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
     }
 
     private string PathFor(Guid id) => Path.Combine(_directory, $"{id:N}.json");
+    private static FileStream OpenSnapshot(string path) => new(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
 
     private async Task WriteAsync(MeasurementProcess measurement, CancellationToken cancellationToken)
     {

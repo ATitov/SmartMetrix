@@ -40,7 +40,7 @@ public sealed class MonitoredComponent
 }
 
 public sealed record StartOperatorMeasurement(Guid? MeasurementId, [Required] string ExcavatorId,
-    [Required] string CoordinateSystemId, string? Reason);
+    [Required] string CoordinateSystemId, string? Reason, Guid? CommandId = null);
 public sealed record OperatorCommand(Guid CommandId, long ExpectedVersion, string? Reason, bool Confirmed);
 public sealed record ComponentStatus(string Name, string Kind, string State, DateTimeOffset CheckedAt, string? Detail);
 public sealed record SystemStatus(string State, bool Configured, DateTimeOffset CheckedAt,

@@ -32,7 +32,7 @@
   </main>
 </div>
 <dialog id="startDialog"><form class="form" id="startForm"><h2>Новое измерение</h2><label>Экскаватор<input name="excavatorId" required placeholder="EXC-01"></label><label>Система координат<input name="coordinateSystemId" required placeholder="quarry:local"></label><label>Причина<input name="reason" required value="Ручной запуск оператором"></label><div class="actions"><button class="button" type="button" data-close="startDialog">Отмена</button><button class="button primary" type="submit">Запустить</button></div></form></dialog>
-<dialog id="detailDialog"><h2>Детали измерения</h2><div id="resultVisual"></div><pre id="detailJson"></pre><div class="actions"><button class="button" data-close="detailDialog">Закрыть</button></div></dialog>
+<dialog id="detailDialog"><h2>Детали измерения</h2><div id="resultVisual"></div><div id="pipelineStages"></div><pre id="detailJson"></pre><div class="actions"><button class="button" data-close="detailDialog">Закрыть</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="/assets/smartmetrix.js"></script>
 </body>

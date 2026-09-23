@@ -4,6 +4,7 @@ using SmartMetrix.CameraService;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
 builder.Services.AddCameraCapture(builder.Configuration);
+builder.Services.AddSingleton<CaptureReceiptStore>();
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
@@ -12,7 +13,7 @@ app.MapSmartMetrixDefaultEndpoints();
 app.MapPost("/v1/measurements/{measurementId:guid}/capture", async (
     Guid measurementId,
     CaptureRequest request,
-    CaptureCoordinator coordinator,
+    CaptureReceiptStore coordinator,
     CancellationToken cancellationToken) =>
 {
     try

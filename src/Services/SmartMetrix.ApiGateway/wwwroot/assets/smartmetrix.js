@@ -1,13 +1,13 @@
 const mode = document.body.dataset.mode;
 const apiKey = document.querySelector('#apiKey');
 const state = { status: null, measurements: [], audit: [], lastSuccess: null, refreshing: false };
-const labels = { Ready:'Готов', Degraded:'Ограниченно', Unavailable:'Недоступен', NotConfigured:'Не настроен', Requested:'Запрошено', Capturing:'Захват', QualityControl:'Контроль качества', Reconstructing:'Реконструкция глубины', Analysing:'Анализ блоков', Georeferencing:'Геопривязка', Failed:'Ошибка', Rejected:'Отклонено', Completed:'Завершено' };
+const labels = { Ready:'Готов', Degraded:'Ограниченно', Unavailable:'Недоступен', NotConfigured:'Не настроен', Requested:'Запрошено', Capturing:'Захват', QualityControl:'Контроль качества', Reconstructing:'Реконструкция глубины', Segmenting:'Сегментация', Persisting:'Сохранение', Analysing:'Анализ блоков', Georeferencing:'Геопривязка', Failed:'Ошибка', Rejected:'Отклонено', Completed:'Завершено' };
 
 const esc = value => { const node = document.createElement('span'); node.textContent = value ?? '—'; return node.innerHTML; };
 const date = value => value ? new Date(value).toLocaleString('ru-RU') : '—';
 const label = value => labels[value] || value || 'Неизвестно';
 const cssState = value => value === 'Ready' || value === 'Completed' ? 'state-ready' : value === 'Failed' || value === 'Rejected' || value === 'Cancelled' ? 'state-danger' : value === 'Degraded' || value === 'Unavailable' ? 'state-warning' : 'state-muted';
-const isActive = value => ['Requested','Capturing','QualityControl','Reconstructing','Analysing','Georeferencing'].includes(value);
+const isActive = value => ['Requested','Capturing','QualityControl','Reconstructing','Segmenting','Analysing','Georeferencing','Persisting'].includes(value);
 const isProblem = value => ['Failed','Rejected','Degraded','Unavailable'].includes(value);
 
 async function api(path, options = {}) {
@@ -109,15 +109,33 @@ function renderResultVisual(item) {
   const root = document.querySelector('#resultVisual');
   if (!root) return;
   if (item.d50 == null) { root.innerHTML = '<div class="empty">Расчётный результат для этого измерения отсутствует</div>'; return; }
-  const values = [['D10',item.d10],['D20',item.d20],['D50',item.d50],['D80',item.d80],['D90',item.d90]];
+  const values = [['D10',item.d10],['D20',item.d20],['D50',item.d50],['D80',item.d80],['D90',item.d90],['D95',item.d95]];
+  const shownValues = values.filter(([,value]) => value != null);
   const maximum = Math.max(...values.map(([,value]) => value || 0), 1);
-  root.innerHTML = `<div class="result-grid"><div class="result-cell"><span class="muted">Блоков</span><b>${item.blockCount ?? '—'}</b></div><div class="result-cell"><span class="muted">Confidence</span><b>${item.confidence == null ? '—' : Math.round(item.confidence*100)+'%'}</b></div><div class="result-cell"><span class="muted">Покрытие</span><b>${item.coverage == null ? '—' : Math.round(item.coverage*100)+'%'}</b></div><div class="result-cell"><span class="muted">Негабарит</span><b>${item.oversizeFraction == null ? '—' : Math.round(item.oversizeFraction*100)+'%'}</b></div></div><div class="histogram">${values.map(([name,value]) => `<div class="hist-bar" style="height:${Math.max(5,(value||0)/maximum*100)}%"><span>${value ?? '—'}</span><small>${name}</small></div>`).join('')}</div>${item.isTestData ? '<div class="warning">Тестовые данные: не использовать для производственных решений.</div>' : ''}`;
+  root.innerHTML = `<div class="result-grid"><div class="result-cell"><span class="muted">Блоков</span><b>${item.blockCount ?? '—'}</b></div><div class="result-cell"><span class="muted">Confidence</span><b>${item.confidence == null ? '—' : Math.round(item.confidence*100)+'%'}</b></div><div class="result-cell"><span class="muted">Покрытие</span><b>${item.coverage == null ? '—' : Math.round(item.coverage*100)+'%'}</b></div><div class="result-cell"><span class="muted">Негабарит</span><b>${item.oversizeFraction == null ? '—' : Math.round(item.oversizeFraction*100)+'%'}</b></div></div><div class="histogram">${shownValues.map(([name,value]) => `<div class="hist-bar" style="height:${Math.max(5,(value||0)/maximum*100)}%"><span>${value ?? '—'}</span><small>${name}</small></div>`).join('')}</div>${item.isTestData ? '<div class="warning">Тестовые данные: не использовать для производственных решений.</div>' : ''}`;
 }
 
 function download(name, content, type) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url);
 }
+
+function renderPipeline(item) {
+  const root = document.querySelector('#pipelineStages');
+  if (!root) return;
+  const names = { calibration:'Калибровка', capture:'Кадры', pose:'Положение при съёмке', quality:'Контроль качества', depth:'Глубина', segmentation:'Сегментация', analysis:'Анализ блоков', georeference:'Геопривязка', result:'Итоговый результат' };
+  root.innerHTML = `${item.failureReason ? `<p class="warning">${esc(item.failureReason)}</p>` : ''}${item.pipeline ? `<h3>Этапы обработки</h3><p class="muted">${item.pipeline.activeStage ? 'Текущий этап: '+esc(names[item.pipeline.activeStage] || item.pipeline.activeStage) : 'Сохранённые результаты'}</p>${(item.pipeline.stages || []).map(stage => `<div class="config-row"><span>${esc(names[stage.name] || stage.name)} · ${date(stage.completedAt)}</span><button class="button" data-stage="${esc(stage.name)}" data-measurement="${esc(item.id)}">Скачать JSON</button></div>`).join('')}` : ''}`;
+}
+
+document.addEventListener('click', async event => {
+  const button = event.target.closest('[data-stage]');
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const value = await api(`/measurements/${button.dataset.measurement}/stages/${button.dataset.stage}`);
+    download(`${button.dataset.measurement}-${button.dataset.stage}.json`, JSON.stringify(value, null, 2), 'application/json');
+  } catch (error) { toast(error.message, true); } finally { button.disabled = false; }
+});
 
 async function loadEngineeringTools() {
   if (mode !== 'engineer') return;
@@ -209,9 +227,11 @@ document.querySelector('#startForm')?.addEventListener('submit', async event => 
   submit.disabled = true;
   try {
     const data = new FormData(event.target);
-    await api('/measurements', { method:'POST', body:JSON.stringify({ excavatorId:data.get('excavatorId'), coordinateSystemId:data.get('coordinateSystemId'), reason:data.get('reason') }) });
+    event.target.dataset.commandId ||= crypto.randomUUID();
+    await api('/measurements', { method:'POST', body:JSON.stringify({ commandId:event.target.dataset.commandId, excavatorId:data.get('excavatorId'), coordinateSystemId:data.get('coordinateSystemId'), reason:data.get('reason') }) });
     document.querySelector('#startDialog').close();
     event.target.reset();
+    delete event.target.dataset.commandId;
     toast('Измерение запущено');
     await refresh();
   } catch (error) { toast(error.message, true); } finally { submit.disabled = false; }
@@ -223,7 +243,7 @@ document.addEventListener('click', async event => {
   if (target.dataset.detail) {
     try {
       const value = await api(`/measurements/${target.dataset.detail}`);
-      renderResultVisual(value);
+      renderResultVisual(value); renderPipeline(value);
       document.querySelector('#detailJson').textContent = JSON.stringify(value, null, 2);
       document.querySelector('#detailDialog').showModal();
     } catch (error) { toast(error.message, true); }
@@ -268,7 +288,7 @@ document.querySelector('#exportDiagnostics')?.addEventListener('click', () => {
 });
 
 document.querySelector('#exportCsv')?.addEventListener('click', () => {
-  const columns = ['id','excavatorId','status','updatedAt','d10','d20','d50','d80','d90','confidence','blockCount','oversizeFraction','coverage'];
+  const columns = ['id','excavatorId','status','updatedAt','d10','d20','d50','d80','d90','d95','isTestData','confidence','blockCount','oversizeFraction','coverage'];
   const csv = '\ufeff' + [columns.join(';'), ...state.measurements.map(item => columns.map(name => String(item[name] ?? '').replaceAll(';',',')).join(';'))].join('\r\n');
   download(`smartmetrix-report-${new Date().toISOString().slice(0,10)}.csv`, csv, 'text/csv;charset=utf-8');
 });

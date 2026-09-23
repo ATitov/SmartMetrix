@@ -25,8 +25,12 @@
 с причиной в журнале и после этого может быть запущен повторно.
 
 Допустимый основной путь: `Requested` → `Capturing` → `QualityControl` → `Reconstructing` →
-`Analysing` → `Georeferencing` → `Completed`. Активный процесс можно компенсировать переходом в
+`Segmenting` → `Analysing` → `Georeferencing` → `Persisting` → `Completed`. Активный процесс можно компенсировать переходом в
 `Rejected` или `Failed`; из этих двух состояний разрешён retry в `Requested`.
+
+Реализованный HTTP-конвейер ручного запуска, checkpoint, артефакты и текущие ограничения
+описаны в [measurement-pipeline.md](measurement-pipeline.md). Он использует пары AB/AC в сетке A;
+полная трёхбазисная реконструкция и автоматический запуск от TriggerService требуют дальнейшей интеграции.
 
 - Команды в реальном времени идут по HTTP/gRPC; доменные события — через NATS JetStream.
 - Полные изображения и облака точек не передаются в сообщениях: только URI и контрольные суммы.

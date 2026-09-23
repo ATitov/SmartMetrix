@@ -125,6 +125,8 @@ api.MapGet("/status", (OperatorBackendClient backend, CancellationToken ct) => b
 api.MapGet("/measurements", (OperatorBackendClient backend, CancellationToken ct) => backend.GetMeasurementsAsync(ct));
 api.MapGet("/measurements/{id:guid}", (Guid id, OperatorBackendClient backend, CancellationToken ct) =>
     backend.GetMeasurementAsync(id, ct));
+api.MapGet("/measurements/{id:guid}/stages/{stage}", (Guid id, string stage, OperatorBackendClient backend, CancellationToken ct) =>
+    backend.GetStageAsync(id, stage, ct));
 api.MapGet("/audit", (IAuditStore audit, CancellationToken ct) => audit.ReadAsync(ct))
     .RequireAuthorization(OperatorPolicies.DangerousCommand);
 api.MapGet("/engineering/system", (EngineeringTools tools) => Results.Ok(tools.SystemSnapshot()))

@@ -12,6 +12,14 @@ The production profile in `deploy/edge` targets Linux ARM64 and keeps credential
 
 The unit is enabled at boot, Compose restarts containers, health checks preserve diagnostics when an SDK/device is absent, and the watchdog reports/restarts unhealthy workloads. The camera service receives only the configured video device, video group, read-only Jetson libraries, and NVIDIA runtime—not blanket privileged access.
 
+Set `SMARTMETRIX_RIG_ID` in the deployment environment for the HTTP measurement pipeline.
+Bootstrap creates writable `orchestrator` and `camera` data directories for checkpoints and capture receipts.
+The default owner is the runtime image's app user (UID/GID 1654); set `SMARTMETRIX_APP_UID` /
+`SMARTMETRIX_APP_GID` when using a different base image, and pass `SMARTMETRIX_DATA_ROOT` to bootstrap
+when overriding the data root. Include these directories in site backups.
+Hardware rectification, calibration and positioning prerequisites are documented in
+[measurement-pipeline.md](measurement-pipeline.md); configuring a RigId alone does not enable a field-ready pipeline.
+
 ## Disk and offline retention
 
 Container logs rotate at 3 × 10 MB per container. Also set journald limits in `/etc/systemd/journald.conf.d/smartmetrix.conf` (`SystemMaxUse=512M`, `SystemKeepFree=2G`) and restart journald. NATS has an 8 GB file-store ceiling. Configure MinIO lifecycle expiry for the operational retention window and monitor the dedicated data filesystem at 80/90%; do not place `/var/lib/smartmetrix` on the root filesystem without an enforced quota. Application object retention is controlled by `Storage__RetentionDays` in the secret environment file.

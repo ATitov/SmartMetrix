@@ -11,6 +11,7 @@ public sealed class CaptureCoordinator(ICameraAdapter adapter, CameraStorageClie
 
     public async Task<CaptureResponse> CaptureAsync(Guid measurementId, CaptureRequest request, CancellationToken cancellationToken)
     {
+        var exposedAt = DateTimeOffset.UtcNow;
         var frames = await adapter.CaptureAsync(cancellationToken);
         var ids = frames.Select(frame => frame.CameraId).Order(StringComparer.Ordinal).ToArray();
         if (frames.Count != 3 || !ids.SequenceEqual(RequiredCameraIds, StringComparer.Ordinal))
@@ -26,7 +27,7 @@ public sealed class CaptureCoordinator(ICameraAdapter adapter, CameraStorageClie
         foreach (var frame in frames.OrderBy(frame => frame.CameraId, StringComparer.Ordinal))
             stored.Add(await storage.StoreAsync(measurementId, frame, cancellationToken));
 
-        return new CaptureResponse(measurementId, stored, skew, adapter.Name, request.CalibrationId);
+        return new CaptureResponse(measurementId, stored, skew, adapter.Name, request.CalibrationId, exposedAt, options.PixelFormat);
     }
 }
 

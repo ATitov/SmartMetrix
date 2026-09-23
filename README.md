@@ -30,6 +30,9 @@ dotnet run --project src/Services/SmartMetrix.MeasurementOrchestrator
 
 ## Локальная проверка
 
+Рабочий HTTP-конвейер, настройка установки и сквозные испытания описаны в
+[`docs/measurement-pipeline.md`](docs/measurement-pipeline.md).
+
 Полная проверка, эквивалентная CI, выполняется из корня репозитория:
 
 ```powershell
