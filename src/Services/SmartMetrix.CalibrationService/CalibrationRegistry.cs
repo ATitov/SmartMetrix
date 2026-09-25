@@ -11,6 +11,7 @@ public sealed class CalibrationConflictException(string message) : Exception(mes
 public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, TimeProvider timeProvider)
 {
     private static readonly JsonSerializerOptions BundleJson = new(JsonSerializerDefaults.Web) { WriteIndented = false };
+    private static readonly string[] CameraIds = ["A", "B", "C"];
     private readonly CalibrationOptions _options = options.Value;
     private readonly object _gate = new();
     private readonly List<CalibrationRecord> _records = [];
@@ -77,8 +78,26 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
     private void ValidatePayload(CalibrationPayload payload, bool validateError)
     {
         if (string.IsNullOrWhiteSpace(payload.RigId)) throw new CalibrationValidationException("rigId is required.");
-        if (payload.Cameras.Count != 3 || payload.Cameras.Select(x => x.CameraId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 3) throw new CalibrationValidationException("Exactly three distinct cameras are required.");
-        if (!Near(payload.Geometry.AbMetres, .7) || !Near(payload.Geometry.BcMetres, .8) || !Near(payload.Geometry.AcMetres, 1.5)) throw new CalibrationValidationException("Rig baselines must be AB=0.7 m, BC=0.8 m and AC=1.5 m within tolerance.");
+        if (payload.Cameras.Count != 3 || !payload.Cameras.Select(x => x.CameraId.ToUpperInvariant()).Order().SequenceEqual(CameraIds)) throw new CalibrationValidationException("Exactly cameras A, B and C are required.");
+        var expected = _options.ExpectedGeometry;
+        if (!Near(payload.Geometry.AbMetres, expected.AbMetres) || !Near(payload.Geometry.BcMetres, expected.BcMetres) || !Near(payload.Geometry.AcMetres, expected.AcMetres)) throw new CalibrationValidationException($"Rig baselines must match configured geometry AB={expected.AbMetres}, BC={expected.BcMetres}, AC={expected.AcMetres} m within tolerance.");
+        if (!double.IsFinite(payload.ReprojectionErrorPixels) || payload.ReprojectionErrorPixels < 0) throw new CalibrationValidationException("Reprojection error must be finite and non-negative.");
+        if (payload.Rectification is { } rectification)
+        {
+            try { rectification.Validate(); }
+            catch (ArgumentException exception) { throw new CalibrationValidationException(exception.Message); }
+            if (payload.Cameras.Any(c => c.Intrinsics.Width != rectification.Width || c.Intrinsics.Height != rectification.Height) ||
+                rectification.Pairs.Any(p => Math.Abs(p.BaselineMetres - (p.LeftCameraId == "B" ? payload.Geometry.BcMetres : p.RightCameraId == "B" ? payload.Geometry.AbMetres : payload.Geometry.AcMetres)) > 1e-6))
+                throw new CalibrationValidationException("Rectification dimensions and baselines must match the calibration.");
+            if (rectification.SchemaVersion == 2)
+            {
+                var cameraA = payload.Cameras.Single(c => c.CameraId.Equals("A", StringComparison.OrdinalIgnoreCase));
+                var projection = rectification.ReferenceProjection!;
+                if (projection.Fx != cameraA.Intrinsics.Fx || projection.Fy != cameraA.Intrinsics.Fy ||
+                    projection.Cx != cameraA.Intrinsics.Cx || projection.Cy != cameraA.Intrinsics.Cy || !projection.Distortion.SequenceEqual(cameraA.Distortion))
+                    throw new CalibrationValidationException("Reference projection must match original camera A intrinsics and distortion.");
+            }
+        }
         if (payload.RigToPlatform.Rotation.Length != 9 || payload.RigToPlatform.Translation.Length != 3) throw new CalibrationValidationException("Rig-to-platform pose must contain a 3x3 rotation and a 3D translation.");
         foreach (var camera in payload.Cameras)
         {
@@ -88,7 +107,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
         if (validateError && payload.ReprojectionErrorPixels > _options.MaximumReprojectionErrorPixels) throw new CalibrationValidationException($"Reprojection error exceeds {_options.MaximumReprojectionErrorPixels} px.");
     }
 
-    private bool Near(double actual, double expected) => Math.Abs(actual - expected) <= _options.BaselineToleranceMetres;
+    private bool Near(double actual, double expected) => double.IsFinite(actual) && actual > 0 && Math.Abs(actual - expected) <= _options.BaselineToleranceMetres;
     private static bool Overlaps(DateTimeOffset aFrom, DateTimeOffset? aTo, DateTimeOffset bFrom, DateTimeOffset? bTo) => aFrom < (bTo ?? DateTimeOffset.MaxValue) && bFrom < (aTo ?? DateTimeOffset.MaxValue);
     private CalibrationRecord Find(Guid id) => _records.SingleOrDefault(x => x.Id == id) ?? throw new KeyNotFoundException($"Calibration {id} was not found.");
     private void Replace(CalibrationRecord record) => _records[_records.FindIndex(x => x.Id == record.Id)] = record;

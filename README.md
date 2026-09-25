@@ -30,6 +30,12 @@ dotnet run --project src/Services/SmartMetrix.MeasurementOrchestrator
 
 ## Локальная проверка
 
+Тестовый захват с IP-камер Hikvision через RTSP/FFmpeg описан в
+[`docs/rtsp-camera.md`](docs/rtsp-camera.md).
+
+Утилита калибровки A/B/C по шаблону ChArUco, создание карт ректификации и экспорт
+черновика описаны в [`tools/camera-calibration/README.md`](tools/camera-calibration/README.md).
+
 Рабочий HTTP-конвейер, настройка установки и сквозные испытания описаны в
 [`docs/measurement-pipeline.md`](docs/measurement-pipeline.md).
 

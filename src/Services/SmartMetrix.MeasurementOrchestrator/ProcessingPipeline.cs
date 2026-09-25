@@ -50,9 +50,14 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
         }
         var capture = await Load("capture");
         var captureResponse = capture.GetProperty("response");
+        if (Text(captureResponse, "adapter") == "Rtsp")
+            throw new PipelineException("UnsynchronizedTestCapture", "RTSP test capture has no hardware exposure timestamps. Use saved frames for offline calibration; live measurement processing is not supported.");
         if (Text(captureResponse, "pixelFormat") != "Mono8")
             throw new PipelineException("UnsupportedPixelFormat", "Pipeline currently supports packed Mono8 only.");
-        if (Text(captureResponse, "adapter") != "Simulator" && !settings.FramesAreRectified)
+        var hasRectification = payload.TryGetProperty("rectification", out var rectification) && rectification.ValueKind == JsonValueKind.Object;
+        if (hasRectification && settings.FramesAreRectified)
+            throw new PipelineException("RectificationConflict", "Calibration contains raw-frame maps; FramesAreRectified must be false to avoid double rectification.");
+        if (Text(captureResponse, "adapter") != "Simulator" && !settings.FramesAreRectified && !hasRectification)
             throw new PipelineException("RectificationNotConfigured", "Hardware frames require rectification into a common camera A grid before reconstruction.");
         var exposureTime = capture.GetProperty("exposedAt").GetDateTimeOffset();
         if (calibration.GetProperty("validFrom").GetDateTimeOffset() > exposureTime ||
@@ -91,11 +96,11 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 return await transport.PostAsync(_options.SegmentationUrl, path + "segmentation",
                     new { frame = new { width, height, channels = 3, pixelFormat = "RGB8", pixels = rgb } }, id, ct);
             }
-            // Both pairs share camera A's pixel grid. BC cannot be merged by index into an A mask.
+            // Mapped BC is reprojected geometrically to A by DepthService; legacy stays AB/AC.
             var geometry = payload.GetProperty("geometry");
-            object Pair(string right, string baseline) => new
+            object Pair(string left, string right, string baseline) => new
             {
-                leftCameraId = "A",
+                leftCameraId = left,
                 rightCameraId = right,
                 baselineMetres = geometry.GetProperty(baseline).GetDouble(),
                 fx = intrinsics.GetProperty("fx").GetDouble(),
@@ -106,6 +111,9 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 translation = cameras["A"].GetProperty("translation"),
                 rectificationMapUri = Text(cameras["A"], "rectificationMapUri")
             };
+            var stereoPairs = new List<object> { Pair("A", "B", "abMetres"), Pair("A", "C", "acMetres") };
+            if (hasRectification && rectification.GetProperty("schemaVersion").GetInt32() == 2)
+                stereoPairs.Add(Pair("B", "C", "bcMetres"));
             return await transport.PostAsync(_options.DepthUrl, path + "reconstruction", new
             {
                 frames = gray.Select(x => new { x.CameraId, x.Width, x.Height, x.Pixels }),
@@ -114,7 +122,8 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                     schemaVersion = 1,
                     calibrationId,
                     settings.CameraRigCoordinateSystemId,
-                    pairs = new[] { Pair("B", "abMetres"), Pair("C", "acMetres") }
+                    pairs = stereoPairs,
+                    rectification = hasRectification ? (object)rectification : null
                 }
             }, id, ct);
         }
@@ -123,6 +132,8 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
         var segmentation = await Load("segmentation");
         if (stage == "analysis")
         {
+            if (hasRectification && (!depth.TryGetProperty("pixelGrid", out var pixelGrid) || pixelGrid.GetString() != "CameraAOriginal"))
+                throw new PipelineException("PixelGridMismatch", "Rectified depth must be reprojected to the original camera A grid before block analysis.");
             var organized = JsonSerializer.Deserialize<JsonElement>(await transport.DownloadAsync(run, Text(depth, "organizedCloudUri"), id, ct));
             if (organized.GetProperty("width").GetInt32() != width || organized.GetProperty("height").GetInt32() != height)
                 throw new PipelineException("ArtifactSizeMismatch", "Depth image dimensions do not match calibration.");

@@ -12,7 +12,8 @@ public sealed record CalibrationPayload(
     IReadOnlyList<CameraCalibration> Cameras,
     RigGeometry Geometry,
     RigPose RigToPlatform,
-    double ReprojectionErrorPixels);
+    double ReprojectionErrorPixels,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SmartMetrix.Contracts.StereoRectification? Rectification = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CalibrationStatus { Draft, Active, Revoked }
@@ -38,4 +39,5 @@ public sealed class CalibrationOptions
     public const string SectionName = "Calibration";
     public double MaximumReprojectionErrorPixels { get; set; } = 1.0;
     public double BaselineToleranceMetres { get; set; } = 0.02;
+    public RigGeometry ExpectedGeometry { get; set; } = new(.7, .8, 1.5);
 }

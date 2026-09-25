@@ -56,6 +56,29 @@ public sealed class CalibrationRegistryTests
 
     private static CalibrationRegistry Registry() => new(Options.Create(new CalibrationOptions()), TimeProvider.System);
 
+    [Fact]
+    public void AcceptsConfiguredOneMetreRigAndRejectsWrongGeometry()
+    {
+        var registry = new CalibrationRegistry(Options.Create(new CalibrationOptions
+        {
+            ExpectedGeometry = new(.25, .75, 1)
+        }), TimeProvider.System);
+        var payload = Payload() with { Geometry = new(.25, .75, 1), Cameras = [Camera("A", 0), Camera("B", .25), Camera("C", 1)] };
+        var record = registry.Create(payload, "calibration-tool");
+        Assert.Equal(CalibrationStatus.Draft, record.Status);
+        Assert.Equal(CalibrationStatus.Active, registry.Activate(record.Id, DateTimeOffset.UtcNow, null, "test").Status);
+        Assert.Throws<CalibrationValidationException>(() => registry.Create(Payload(), "test"));
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(-1)]
+    public void RejectsInvalidReprojectionErrors(double error)
+    {
+        Assert.Throws<CalibrationValidationException>(() => Registry().Create(Payload(error), "test"));
+    }
+
     private static CalibrationPayload Payload(double error = .3) => new(
         "rig-1",
         [Camera("A", 0), Camera("B", .7), Camera("C", 1.5)],

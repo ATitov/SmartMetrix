@@ -40,6 +40,15 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
     public async Task<ReconstructionResult> ReconstructAsync(Guid measurementId, ReconstructionRequest request, CancellationToken cancellationToken)
     {
         Validate(request);
+        if (request.Calibration.Rectification is not null)
+        {
+            var rectified = await RectifiedDepthProcessor.ComputeAsync(request, backend, _options, cancellationToken);
+            var pixels = rectified.Points;
+            var valid = pixels.Where(p => p.DepthConfidence > 0).Select(p => new Point3((float)p.XMetres, (float)p.YMetres, (float)p.ZMetres, (float)p.DepthConfidence)).ToList();
+            var mask = pixels.Select(p => p.DepthConfidence > 0 ? (byte)Math.Clamp(Math.Round(p.DepthConfidence * 255), 1, 255) : (byte)0).ToArray();
+            return await StoreAsync(measurementId, request, request.Calibration.Rectification.Width, request.Calibration.Rectification.Height,
+                valid, pixels, mask, pixels.Length - valid.Count, rectified.SelectedBaselines, cancellationToken, rectified.Checksums);
+        }
         var frames = request.Frames.ToDictionary(frame => frame.CameraId, StringComparer.OrdinalIgnoreCase);
         var maps = request.Calibration.Pairs.Select(pair => new PairResult(
             pair,
@@ -86,6 +95,13 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
             selected[PairName(chosen.Calibration)]++;
         }
 
+        return await StoreAsync(measurementId, request, width, height, points, organized, confidence, invalid, selected, cancellationToken);
+    }
+
+    private async Task<ReconstructionResult> StoreAsync(Guid measurementId, ReconstructionRequest request, int width, int height,
+        List<Point3> points, OrganizedDepthPoint[] organized, byte[] confidence, int invalid, IReadOnlyDictionary<string, int> selected,
+        CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? checksums = null)
+    {
         var cloudUri = await artifacts.PutAsync(measurementId, "depth/point-cloud.ply", "application/ply",
             Encoding.ASCII.GetBytes(ToPly(points)), cancellationToken);
         var confidenceUri = await artifacts.PutAsync(measurementId, "depth/confidence.pgm", "image/x-portable-graymap",
@@ -95,7 +111,8 @@ public sealed class DepthReconstructor(IStereoBackend backend, IDepthArtifactSto
         var organizedUri = await artifacts.PutAsync(measurementId, "depth/organized-cloud.json", "application/json",
             JsonSerializer.SerializeToUtf8Bytes(new OrganizedDepthCloud(width, height, organized),
                 JsonOptions), cancellationToken);
-        return new ReconstructionResult(created, points.Count, invalid, selected, organizedUri, _options.Backend);
+        return new ReconstructionResult(created, points.Count, invalid, selected, organizedUri, _options.Backend,
+            checksums is null ? null : "CameraAOriginal", checksums);
     }
 
     private static void Validate(ReconstructionRequest request)

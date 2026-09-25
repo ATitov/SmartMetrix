@@ -1,5 +1,9 @@
 # Three-camera capture
 
+For unsynchronized IP-camera test capture (one camera or A/B/C), see
+[RTSP camera setup](rtsp-camera.md). RTSP test responses explicitly report unknown
+exposure time/skew and host receipt times; they are not hardware-synchronized captures.
+
 `CameraService` exposes `POST /v1/measurements/{measurementId}/capture`. A successful request returns exactly one original frame from cameras A, B and C, their frame IDs and hardware timestamps, the measured timestamp skew, and immutable StorageService URIs.
 
 Production uses `Camera__Adapter=Arena`. The native ABI is defined in `src/Services/SmartMetrix.CameraService/native/smartmetrix_arena.h`; the native implementation owns Arena SDK discovery, serial-to-A/B/C assignment, common hardware trigger configuration, and identical exposure. If the library, SDK, or rig is absent, the endpoint returns HTTP 503 with code `NotConfigured`.

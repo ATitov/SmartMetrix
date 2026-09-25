@@ -21,6 +21,24 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class PipelineHttpIntegrationTests
 {
     [Fact]
+    public async Task RectificationMapsReachDepthAndKeepAnalysisOnOriginalCameraGrid()
+    {
+        await using var rig = new PipelineTestRig();
+        await rig.StartAsync();
+        await rig.ConfigureRigAsync(rectification: true);
+        var measurement = await rig.PostAsync<MeasurementProcess>("orchestrator", "measurements",
+            new StartMeasurementRequest(Guid.NewGuid(), null, "EX-TEST", "quarry:test", "rectification"));
+        var result = await rig.WaitForTerminalAsync(measurement.Id);
+        Assert.True(result.Status == MeasurementStatus.Completed, JsonSerializer.Serialize(result, PipelineJson.Options) + rig.Logs);
+        var depth = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{result.Id}/stages/depth");
+        Assert.Equal("CameraAOriginal", depth.GetProperty("pixelGrid").GetString());
+        Assert.Equal(3, depth.GetProperty("rectificationChecksums").EnumerateObject().Count());
+        Assert.True(depth.GetProperty("selectedBaselines").GetProperty("BC").GetInt32() > 0);
+        Assert.True(result.D50 > 0);
+        Assert.True(result.BlockCount > 0);
+    }
+
+    [Fact]
     public async Task ServicesCompleteMeasurementAndRejectBadFramesWithoutSyntheticResults()
     {
         await using var rig = new PipelineTestRig();
@@ -224,6 +242,7 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         start.Environment["Camera__StorageServiceUrl"] = _urls["storage"];
         start.Environment["Depth__StorageBaseUrl"] = _urls["storage"];
         start.Environment["Depth__Backend"] = "Cpu";
+        start.Environment["Depth__CalibrationDirectory"] = Path.Combine(_directory, "calibration-maps");
         start.Environment["Depth__MaximumDisparity"] = "20";
         start.Environment["Depth__MinimumSpeckleSize"] = "4";
         start.Environment["Quality__Scenes__default__Version"] = "http-test-v1";
@@ -247,12 +266,27 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         _processes.Add(process);
     }
 
-    public async Task ConfigureRigAsync()
+    public async Task ConfigureRigAsync(bool rectification = false)
     {
         double[] identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];
         var payload = new CalibrationPayload("rig-test", CameraIds.Select(id => new CameraCalibration(id,
-            new(80, 80, 64, 32, 128, 64), [0], identity, [0, 0, 0], "s3://calibration/identity")).ToArray(),
+            new(80, 80, 64, 32, 128, 64), [0, 0, 0, 0, 0], identity, [0, 0, 0], "s3://calibration/identity")).ToArray(),
             new(.7, .8, 1.5), new(identity, [0, 0, 0]), .1);
+        if (rectification)
+        {
+            var root = Path.Combine(_directory, "calibration-maps");
+            var hashB = RectificationTests.WriteMaps(root, "AB.npz", 128, 64, 2);
+            var hashC = RectificationTests.WriteMaps(root, "AC.npz", 128, 64, 3);
+            var hashBc = RectificationTests.WriteMaps(root, "BC.npz", 128, 64, 1);
+            payload = payload with
+            {
+                Rectification = new(2, 128, 64, "A", [
+                new("B", "AB.npz", hashB, 80, 80, 62, 32, .7, identity, "A", [0, 0, 0]),
+                new("C", "AC.npz", hashC, 80, 80, 61, 32, 1.5, identity, "A", [0, 0, 0]),
+                new("C", "BC.npz", hashBc, 80, 80, 63, 32, .8, identity, "B", [.7, 0, 0])],
+                new(80, 80, 64, 32, [0, 0, 0, 0, 0]))
+            };
+        }
         var record = await PostAsync<CalibrationRecord>("calibration", "api/calibrations/", payload);
         await PostAsync<CalibrationRecord>("calibration", $"api/calibrations/{record.Id}/activate",
             new ActivationRequest(DateTimeOffset.UtcNow.AddHours(-1), null, "test"));

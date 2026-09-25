@@ -19,7 +19,9 @@ public sealed class CaptureCoordinator(ICameraAdapter adapter, CameraStorageClie
         if (frames.Any(frame => frame.Payload.IsEmpty))
             throw new CameraCaptureException("FrameSetIncomplete", "A captured frame has an empty payload.");
 
-        var skew = frames.Max(frame => frame.HardwareTimestampNanoseconds) - frames.Min(frame => frame.HardwareTimestampNanoseconds);
+        long? skew = frames.All(frame => frame.TimestampSource == "Hardware")
+            ? frames.Max(frame => frame.HardwareTimestampNanoseconds) - frames.Min(frame => frame.HardwareTimestampNanoseconds)
+            : null;
         if (skew > options.MaximumTimestampSkewNanoseconds)
             throw new CameraCaptureException("TimestampSkewExceeded", $"Frame timestamp skew {skew} ns exceeds {options.MaximumTimestampSkewNanoseconds} ns.");
 
@@ -27,7 +29,8 @@ public sealed class CaptureCoordinator(ICameraAdapter adapter, CameraStorageClie
         foreach (var frame in frames.OrderBy(frame => frame.CameraId, StringComparer.Ordinal))
             stored.Add(await storage.StoreAsync(measurementId, frame, cancellationToken));
 
-        return new CaptureResponse(measurementId, stored, skew, adapter.Name, request.CalibrationId, exposedAt, options.PixelFormat);
+        return new CaptureResponse(measurementId, stored, skew, adapter.Name, request.CalibrationId,
+            skew is null ? null : exposedAt, options.PixelFormat, adapter.Name is "Rtsp" or "Simulator");
     }
 }
 
@@ -41,13 +44,14 @@ public sealed class CameraStorageClient(HttpClient client)
         request.Content = new ReadOnlyMemoryContent(frame.Payload);
         request.Content.Headers.ContentType = new(frame.ContentType);
         request.Headers.Add("X-Content-SHA256", hash);
-        request.Headers.Add("X-Provenance", "camera-service:original");
+        request.Headers.Add("X-Provenance", frame.TimestampSource == "HostReceive" ? "camera-service:rtsp-decoded-test" : "camera-service:original");
         using var response = await client.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new CameraCaptureException("StorageFailure", $"StorageService rejected camera {frame.CameraId}: {(int)response.StatusCode}.", 502);
         var metadata = await response.Content.ReadFromJsonAsync<StorageMetadata>(cancellationToken) ??
             throw new CameraCaptureException("StorageFailure", "StorageService returned an empty response.", 502);
-        return new StoredFrame(frame.CameraId, frame.FrameId, frame.HardwareTimestampNanoseconds, metadata.Uri, metadata.Sha256);
+        return new StoredFrame(frame.CameraId, frame.FrameId, frame.HardwareTimestampNanoseconds, metadata.Uri, metadata.Sha256,
+            frame.ReceivedAt, frame.Width, frame.Height, frame.TimestampSource);
     }
     private sealed record StorageMetadata(string Uri, string Sha256);
 }
@@ -56,11 +60,25 @@ public static class CameraServices
 {
     public static IServiceCollection AddCameraCapture(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<CameraOptions>().Bind(configuration.GetSection(CameraOptions.SectionName)).ValidateDataAnnotations().ValidateOnStart();
+        services.AddOptions<CameraOptions>().Bind(configuration.GetSection(CameraOptions.SectionName)).ValidateDataAnnotations()
+            .Validate(options => !options.Adapter.Equals("Arena", StringComparison.OrdinalIgnoreCase) ||
+                new[] { options.CameraASerialNumber, options.CameraBSerialNumber, options.CameraCSerialNumber }.All(x => !string.IsNullOrWhiteSpace(x)),
+                "Arena requires camera serial numbers A/B/C.")
+            .Validate(options => !options.Adapter.Equals("Rtsp", StringComparison.OrdinalIgnoreCase) ||
+                (options.Rtsp.TestMode && options.PixelFormat == "Mono8" && !string.IsNullOrWhiteSpace(options.Rtsp.FfmpegPath) &&
+                 options.Rtsp.MaximumPixels is > 0 and <= 30_000_000),
+                "RTSP requires TestMode=true, Mono8, FfmpegPath and MaximumPixels between 1 and 30000000.")
+            .ValidateOnStart();
         var adapterName = configuration[$"{CameraOptions.SectionName}:Adapter"] ?? "Arena";
         if (adapterName.Equals("Simulator", StringComparison.OrdinalIgnoreCase)) services.AddSingleton<ICameraAdapter, SimulatorCameraAdapter>();
         else if (adapterName.Equals("Arena", StringComparison.OrdinalIgnoreCase)) services.AddSingleton<ICameraAdapter, ArenaCameraAdapter>();
-        else throw new InvalidOperationException($"Unknown camera adapter '{adapterName}'. Expected Arena or Simulator.");
+        else if (adapterName.Equals("Rtsp", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IRtspFrameReader, FfmpegRtspFrameReader>();
+            services.AddSingleton<RtspCameraAdapter>();
+            services.AddSingleton<ICameraAdapter>(provider => provider.GetRequiredService<RtspCameraAdapter>());
+        }
+        else throw new InvalidOperationException($"Unknown camera adapter '{adapterName}'. Expected Arena, Simulator or Rtsp.");
         services.AddSingleton<CaptureCoordinator>();
         services.AddHttpClient<CameraStorageClient>((provider, client) =>
         {

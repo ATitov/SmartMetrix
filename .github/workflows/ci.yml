@@ -16,6 +16,24 @@ permissions:
   contents: read
 
 jobs:
+  camera-calibration:
+    name: Camera calibration utility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/camera-calibration/requirements.txt
+      - run: python -m pip install -r tools/camera-calibration/requirements.txt
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build tools/SmartMetrix.DepthComparison/SmartMetrix.DepthComparison.csproj -c Release --locked-mode
+      - run: python -m unittest discover -s tools/camera-calibration -p 'test_*.py' -v
+
   verify:
     name: Restore, format, build and test
     runs-on: ubuntu-latest

@@ -146,11 +146,13 @@ services:
       - ${SMARTMETRIX_NATIVE_ROOT:-/opt/smartmetrix/native}:/app/native:ro
       - /usr/local/cuda:/usr/local/cuda:ro
       - /opt/nvidia/vpi2:/opt/nvidia/vpi2:ro
+      - ${SMARTMETRIX_CALIBRATION_ROOT:-/opt/smartmetrix/calibration}:/app/calibration:ro
     environment:
       <<: *common-environment
       Depth__Backend: ${DEPTH_BACKEND:-Native}
       Depth__NativeProvider: ${DEPTH_NATIVE_PROVIDER:-OpenCvCuda}
       Depth__StorageBaseUrl: http://storage-service:8080
+      Depth__CalibrationDirectory: /app/calibration
       LD_LIBRARY_PATH: /app/native:/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
