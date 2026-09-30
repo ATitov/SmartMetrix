@@ -1,3 +1,5 @@
+using SmartMetrix.Persistence;
+using SmartMetrix.Messaging;
 using SmartMetrix.Domain;
 using SmartMetrix.MeasurementOrchestrator;
 using SmartMetrix.ServiceDefaults;
@@ -5,9 +7,16 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+var usePostgres = builder.AddSmartMetrixPersistence("measurement");
 builder.Services.Configure<MeasurementWorkflowOptions>(builder.Configuration.GetSection(MeasurementWorkflowOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<IMeasurementStore, JsonMeasurementStore>();
+if (usePostgres)
+{
+    builder.Services.AddSmartMetrixPostgresMessaging(builder.Configuration.GetValue("Messaging:DispatchEnabled", true));
+    builder.Services.AddSingleton<IMeasurementStore, PostgresMeasurementStore>();
+    builder.Services.AddSingleton<PostgresStageStore>();
+}
+else builder.Services.AddSingleton<IMeasurementStore, JsonMeasurementStore>();
 builder.Services.AddSingleton<MeasurementWorkflow>();
 builder.Services.AddHostedService<MeasurementRecoveryService>();
 builder.Services.AddHostedService<DemoMeasurementSeeder>();

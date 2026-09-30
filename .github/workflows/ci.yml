@@ -16,6 +16,59 @@ permissions:
   contents: read
 
 jobs:
+  gui-prototypes:
+    name: Responsive GUI prototypes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/gui-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.19.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-screenshots
+          path: artifacts/gui/
+
+  rtk-base-station:
+    name: RTK base station
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tools/rtk-base-station/test/station.test.mjs
+
+  camera-calibration:
+    name: Camera calibration utility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/camera-calibration/requirements.txt
+      - run: python -m pip install -r tools/camera-calibration/requirements.txt
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build tools/SmartMetrix.DepthComparison/SmartMetrix.DepthComparison.csproj -c Release --locked-mode
+      - run: python -m unittest discover -s tools/camera-calibration -p 'test_*.py' -v
+
   verify:
     name: Restore, format, build and test
     runs-on: ubuntu-latest
@@ -42,12 +95,16 @@ jobs:
         run: dotnet build SmartMetrix.sln --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test SmartMetrix.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+        env:
+          SMARTMETRIX_RUN_INTEGRATION_TESTS: 'true'
+        run: dotnet test SmartMetrix.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: |
+            **/TestResults/*.trx
+            **/TestResults/**/coverage.cobertura.xml
           if-no-files-found: ignore

@@ -11,4 +11,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../BuildingBlocks/SmartMetrix.Persistence/SmartMetrix.Persistence.csproj" />
+  </ItemGroup>
 </Project>

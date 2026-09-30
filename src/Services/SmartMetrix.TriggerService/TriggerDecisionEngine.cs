@@ -18,6 +18,9 @@ public sealed class TriggerOptions
     [Range(0, double.MaxValue)] public double MaximumDistanceMetres { get; set; } = 30;
     [Range(0, int.MaxValue)] public int DebounceMilliseconds { get; set; } = 1000;
     [Range(0, int.MaxValue)] public int CooldownSeconds { get; set; } = 10;
+    [Range(100, 60000)] public int RequestLifetimeMilliseconds { get; set; } = 2000;
+    [Range(1, 10)] public int PublishAttempts { get; set; } = 3;
+    [Range(10, 10000)] public int PublishTimeoutMilliseconds { get; set; } = 500;
 }
 
 public sealed class TriggerOptionsValidator : IValidateOptions<TriggerOptions>
@@ -46,7 +49,7 @@ public sealed record TriggerDecision(
     TriggerSnapshot Inputs,
     TimeSpan? Remaining);
 
-public sealed record TriggerEvaluationResult(TriggerDecision Decision, Guid? MeasurementId);
+public sealed record TriggerEvaluationResult(TriggerDecision Decision, Guid? MeasurementId, Guid? EventId = null, DateTimeOffset? ExpiresAt = null);
 
 public sealed class TriggerDecisionEngine(TimeProvider clock, IOptions<TriggerOptions> configured)
 {
@@ -110,31 +113,6 @@ public sealed class TriggerDecisionEngine(TimeProvider clock, IOptions<TriggerOp
         double.IsFinite(input.DistanceMetres);
 }
 
-public sealed class TriggerCoordinator(TriggerDecisionEngine engine, TimeProvider clock, IOutboxStore outbox)
-{
-    public async Task<TriggerEvaluationResult> EvaluateAsync(TriggerSnapshot snapshot, CancellationToken cancellationToken)
-    {
-        var decision = engine.Evaluate(snapshot);
-        if (!decision.Accepted) return new(decision, null);
-
-        var measurementId = MeasurementId.New();
-        var inputs = new CaptureDecisionInputs(
-            snapshot.CanSpeedMetresPerSecond,
-            snapshot.EncoderSpeedMetresPerSecond,
-            snapshot.VibrationRmsMetresPerSecondSquared,
-            snapshot.AngularVelocityDegreesPerSecond,
-            snapshot.DistanceMetres,
-            snapshot.CamerasReady,
-            snapshot.ManualCommand,
-            snapshot.ManualInhibit);
-        var request = new CaptureRequested(measurementId, decision.Reason, decision.EvaluatedAt, inputs);
-        var envelope = new EventEnvelope<CaptureRequested>(Guid.NewGuid(), EventEnvelope.CurrentSchemaVersion,
-            clock.GetUtcNow(), measurementId.ToString(), request);
-        await outbox.EnqueueAsync(envelope, cancellationToken);
-        return new(decision, measurementId.Value);
-    }
-}
-
 public static class TriggerServiceExtensions
 {
     public static IServiceCollection AddTriggerService(this IServiceCollection services, IConfiguration configuration)
@@ -145,7 +123,7 @@ public static class TriggerServiceExtensions
             .Bind(configuration.GetSection(TriggerOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
-        services.AddSmartMetrixMessaging();
+        services.AddSmartMetrixJetStreamPublisher();
         services.AddSingleton<TriggerDecisionEngine>();
         services.AddSingleton<TriggerCoordinator>();
         return services;

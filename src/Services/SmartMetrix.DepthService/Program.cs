@@ -23,7 +23,19 @@ app.UseSmartMetrixServiceDefaults();
 app.MapSmartMetrixDefaultEndpoints();
 app.MapPost("/v1/measurements/{measurementId:guid}/reconstruction", async (
     Guid measurementId, ReconstructionRequest request, DepthReconstructor reconstructor, CancellationToken cancellationToken) =>
-    Results.Ok(await reconstructor.ReconstructAsync(measurementId, request, cancellationToken)));
+{
+    try { return Results.Ok(await reconstructor.ReconstructAsync(measurementId, request, cancellationToken)); }
+    catch (RectificationException exception)
+    {
+        return Results.Problem(title: exception.Code, detail: exception.Message, statusCode: exception.StatusCode,
+            extensions: new Dictionary<string, object?> { ["code"] = exception.Code });
+    }
+    catch (ArgumentException)
+    {
+        return Results.Problem(title: "InvalidCalibration", detail: "Invalid reconstruction frames or calibration.", statusCode: 422,
+            extensions: new Dictionary<string, object?> { ["code"] = "InvalidCalibration" });
+    }
+});
 
 app.Run();
 

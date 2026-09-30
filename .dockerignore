@@ -1,0 +1,16 @@
+.git
+**/.git
+**/bin
+**/obj
+**/TestResults
+**/.venv
+**/__pycache__
+**/weights
+**/output
+**/*.pt
+**/*.pth
+**/.env
+data
+artifacts
+# Python has its own build context and .dockerignore.
+StoneVision

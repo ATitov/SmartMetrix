@@ -9,6 +9,7 @@ public sealed class GeoreferenceTests
     private static readonly string[] ExpectedVersions = ["cal-4", "rig-7", "mount-2", "pose-11"];
 
     [Fact]
+    [Trait("Requirement", "GEO-02")]
     public void ComposesCameraToQuarryAndPreservesEveryVersion()
     {
         var request = Request(new LocalPoint(1, 0, 0));
@@ -39,6 +40,7 @@ public sealed class GeoreferenceTests
     }
 
     [Fact]
+    [Trait("Requirement", "GEO-03")]
     public void PositionAndAngleErrorsIncreaseUncertainty()
     {
         var request = Request(new LocalPoint(10, 0, 0));
@@ -64,6 +66,29 @@ public sealed class GeoreferenceTests
     public void ResultCannotBeCreatedWithoutCoordinateSystem()
     {
         Assert.Throws<ArgumentException>(() => new GeoreferenceResult(Guid.NewGuid(), "", 1, [], [], []));
+    }
+
+    [Theory]
+    [Trait("Requirement", "GEO-01")]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void NonFiniteGeometryIsRejected(double invalid)
+    {
+        Assert.Throws<ArgumentException>(() => new Georeferencer().Georeference(Guid.NewGuid(),
+            Request(new LocalPoint(invalid, 0, 0))));
+    }
+
+    [Theory]
+    [Trait("Requirement", "GEO-01")]
+    [InlineData(-1)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void InvalidCovarianceIsRejected(double invalid)
+    {
+        var request = Request(new LocalPoint(1, 0, 0));
+        request.ExposurePose.Covariance[0] = invalid;
+        Assert.Throws<ArgumentException>(() => new Georeferencer().Georeference(Guid.NewGuid(), request));
     }
 
     private static GeoreferenceRequest Request(LocalPoint point)

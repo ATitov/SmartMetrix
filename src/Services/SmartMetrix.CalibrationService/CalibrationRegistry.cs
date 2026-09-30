@@ -1,3 +1,4 @@
+using SmartMetrix.Persistence;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,9 +9,10 @@ namespace SmartMetrix.CalibrationService;
 public sealed class CalibrationValidationException(string message) : Exception(message);
 public sealed class CalibrationConflictException(string message) : Exception(message);
 
-public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, TimeProvider timeProvider)
+public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, TimeProvider timeProvider, PostgresDatabase? database = null)
 {
     private static readonly JsonSerializerOptions BundleJson = new(JsonSerializerDefaults.Web) { WriteIndented = false };
+    private static readonly string[] CameraIds = ["A", "B", "C"];
     private readonly CalibrationOptions _options = options.Value;
     private readonly object _gate = new();
     private readonly List<CalibrationRecord> _records = [];
@@ -18,6 +20,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord Create(CalibrationPayload payload, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.Create(payload, actor), true);
         ValidatePayload(payload, validateError: false);
         lock (_gate)
         {
@@ -33,6 +36,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord Activate(Guid id, DateTimeOffset validFrom, DateTimeOffset? validTo, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.Activate(id, validFrom, validTo, actor), true);
         if (validTo <= validFrom) throw new CalibrationValidationException("validTo must be later than validFrom.");
         lock (_gate)
         {
@@ -50,6 +54,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord Revoke(Guid id, string actor, string reason)
     {
+        if (database is not null) return InDatabase(registry => registry.Revoke(id, actor, reason), true);
         if (string.IsNullOrWhiteSpace(reason)) throw new CalibrationValidationException("A revocation reason is required.");
         lock (_gate)
         {
@@ -64,21 +69,57 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord? GetActive(string rigId, DateTimeOffset at)
     {
+        if (database is not null) return InDatabase(registry => registry.GetActive(rigId, at), false);
         lock (_gate) return _records.SingleOrDefault(x => x.Payload.RigId == rigId && x.Status == CalibrationStatus.Active && x.ValidFrom <= at && (x.ValidTo is null || at < x.ValidTo));
     }
 
-    public CalibrationRecord Get(Guid id) { lock (_gate) return Find(id); }
-    public IReadOnlyList<CalibrationRecord> List(string? rigId = null) { lock (_gate) return _records.Where(x => rigId is null || x.Payload.RigId == rigId).ToArray(); }
-    public IReadOnlyList<CalibrationAuditEntry> AuditLog(Guid id) { lock (_gate) return _audit.Where(x => x.CalibrationId == id).ToArray(); }
-    public CalibrationBundle Export(Guid id) { lock (_gate) { var x = Find(id); return new(1, x.Id, x.Version, x.Payload, x.Checksum); } }
+    public CalibrationRecord Get(Guid id) { if (database is not null) return InDatabase(registry => registry.Get(id), false); lock (_gate) return Find(id); }
+    public IReadOnlyList<CalibrationRecord> List(string? rigId = null) { if (database is not null) return InDatabase(registry => registry.List(rigId), false); lock (_gate) return _records.Where(x => rigId is null || x.Payload.RigId == rigId).ToArray(); }
+    public IReadOnlyList<CalibrationAuditEntry> AuditLog(Guid id) { if (database is not null) return InDatabase(registry => registry.AuditLog(id), false); lock (_gate) return _audit.Where(x => x.CalibrationId == id).ToArray(); }
+    public CalibrationBundle Export(Guid id) { if (database is not null) return InDatabase(registry => registry.Export(id), false); lock (_gate) { var x = Find(id); return new(1, x.Id, x.Version, x.Payload, x.Checksum); } }
 
     public static bool Verify(CalibrationBundle bundle) => string.Equals(bundle.Checksum, ComputeChecksum(bundle.SchemaVersion, bundle.CalibrationId, bundle.Version, bundle.Calibration), StringComparison.OrdinalIgnoreCase);
+
+    public sealed record StoredState(List<CalibrationRecord> Records, List<CalibrationAuditEntry> Audit);
+
+    private T InDatabase<T>(Func<CalibrationRegistry, T> action, bool write)
+    {
+        using var session = database!.Open("registry", () => new StoredState([], []));
+        var registry = new CalibrationRegistry(options, timeProvider);
+        registry._records.AddRange(session.Value.Records);
+        registry._audit.AddRange(session.Value.Audit);
+        var result = action(registry);
+        if (write)
+        {
+            session.Value = new(registry._records, registry._audit);
+            session.Commit();
+        }
+        return result;
+    }
 
     private void ValidatePayload(CalibrationPayload payload, bool validateError)
     {
         if (string.IsNullOrWhiteSpace(payload.RigId)) throw new CalibrationValidationException("rigId is required.");
-        if (payload.Cameras.Count != 3 || payload.Cameras.Select(x => x.CameraId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 3) throw new CalibrationValidationException("Exactly three distinct cameras are required.");
-        if (!Near(payload.Geometry.AbMetres, .7) || !Near(payload.Geometry.BcMetres, .8) || !Near(payload.Geometry.AcMetres, 1.5)) throw new CalibrationValidationException("Rig baselines must be AB=0.7 m, BC=0.8 m and AC=1.5 m within tolerance.");
+        if (payload.Cameras.Count != 3 || !payload.Cameras.Select(x => x.CameraId.ToUpperInvariant()).Order().SequenceEqual(CameraIds)) throw new CalibrationValidationException("Exactly cameras A, B and C are required.");
+        var expected = _options.ExpectedGeometry;
+        if (!Near(payload.Geometry.AbMetres, expected.AbMetres) || !Near(payload.Geometry.BcMetres, expected.BcMetres) || !Near(payload.Geometry.AcMetres, expected.AcMetres)) throw new CalibrationValidationException($"Rig baselines must match configured geometry AB={expected.AbMetres}, BC={expected.BcMetres}, AC={expected.AcMetres} m within tolerance.");
+        if (!double.IsFinite(payload.ReprojectionErrorPixels) || payload.ReprojectionErrorPixels < 0) throw new CalibrationValidationException("Reprojection error must be finite and non-negative.");
+        if (payload.Rectification is { } rectification)
+        {
+            try { rectification.Validate(); }
+            catch (ArgumentException exception) { throw new CalibrationValidationException(exception.Message); }
+            if (payload.Cameras.Any(c => c.Intrinsics.Width != rectification.Width || c.Intrinsics.Height != rectification.Height) ||
+                rectification.Pairs.Any(p => Math.Abs(p.BaselineMetres - (p.LeftCameraId == "B" ? payload.Geometry.BcMetres : p.RightCameraId == "B" ? payload.Geometry.AbMetres : payload.Geometry.AcMetres)) > 1e-6))
+                throw new CalibrationValidationException("Rectification dimensions and baselines must match the calibration.");
+            if (rectification.SchemaVersion == 2)
+            {
+                var cameraA = payload.Cameras.Single(c => c.CameraId.Equals("A", StringComparison.OrdinalIgnoreCase));
+                var projection = rectification.ReferenceProjection!;
+                if (projection.Fx != cameraA.Intrinsics.Fx || projection.Fy != cameraA.Intrinsics.Fy ||
+                    projection.Cx != cameraA.Intrinsics.Cx || projection.Cy != cameraA.Intrinsics.Cy || !projection.Distortion.SequenceEqual(cameraA.Distortion))
+                    throw new CalibrationValidationException("Reference projection must match original camera A intrinsics and distortion.");
+            }
+        }
         if (payload.RigToPlatform.Rotation.Length != 9 || payload.RigToPlatform.Translation.Length != 3) throw new CalibrationValidationException("Rig-to-platform pose must contain a 3x3 rotation and a 3D translation.");
         foreach (var camera in payload.Cameras)
         {
@@ -88,7 +129,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
         if (validateError && payload.ReprojectionErrorPixels > _options.MaximumReprojectionErrorPixels) throw new CalibrationValidationException($"Reprojection error exceeds {_options.MaximumReprojectionErrorPixels} px.");
     }
 
-    private bool Near(double actual, double expected) => Math.Abs(actual - expected) <= _options.BaselineToleranceMetres;
+    private bool Near(double actual, double expected) => double.IsFinite(actual) && actual > 0 && Math.Abs(actual - expected) <= _options.BaselineToleranceMetres;
     private static bool Overlaps(DateTimeOffset aFrom, DateTimeOffset? aTo, DateTimeOffset bFrom, DateTimeOffset? bTo) => aFrom < (bTo ?? DateTimeOffset.MaxValue) && bFrom < (aTo ?? DateTimeOffset.MaxValue);
     private CalibrationRecord Find(Guid id) => _records.SingleOrDefault(x => x.Id == id) ?? throw new KeyNotFoundException($"Calibration {id} was not found.");
     private void Replace(CalibrationRecord record) => _records[_records.FindIndex(x => x.Id == record.Id)] = record;

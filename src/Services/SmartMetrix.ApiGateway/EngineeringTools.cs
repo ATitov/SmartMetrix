@@ -1,9 +1,10 @@
+using SmartMetrix.Persistence;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
 namespace SmartMetrix.ApiGateway;
 
-public sealed class EngineeringTools(IOptions<OperatorApiOptions> options, IWebHostEnvironment environment)
+public sealed class EngineeringTools(IOptions<OperatorApiOptions> options, IWebHostEnvironment environment, PostgresDatabase? database = null)
 {
     private static readonly HashSet<string> AllowedSettings = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -71,6 +72,7 @@ public sealed class EngineeringTools(IOptions<OperatorApiOptions> options, IWebH
 
     public async Task<Dictionary<string, string>> GetConfigurationAsync(CancellationToken ct)
     {
+        if (database is not null) return (await database.ReadAsync<List<ConfigurationRevision>>("runtime-config-history", ct))?.LastOrDefault()?.Values ?? Defaults();
         var path = ConfigPath();
         if (!File.Exists(path)) return Defaults();
         await using var stream = File.OpenRead(path);
@@ -81,12 +83,21 @@ public sealed class EngineeringTools(IOptions<OperatorApiOptions> options, IWebH
     {
         var clean = values.Where(item => AllowedSettings.Contains(item.Key) && item.Value.Length <= 256)
             .ToDictionary(item => item.Key, item => item.Value.Trim(), StringComparer.OrdinalIgnoreCase);
+        if (database is not null)
+        {
+            await using var session = await database.OpenAsync("runtime-config-history", () => new List<ConfigurationRevision>(), ct);
+            session.Value.Add(new(DateTimeOffset.UtcNow, clean));
+            await session.CommitAsync(ct);
+            return clean;
+        }
         var path = ConfigPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await using var stream = File.Create(path);
         await JsonSerializer.SerializeAsync(stream, clean, JsonOptions, ct);
         return clean;
     }
+
+    public sealed record ConfigurationRevision(DateTimeOffset At, Dictionary<string, string> Values);
 
     private string ConfigPath() => Path.IsPathRooted(options.Value.RuntimeConfigPath)
         ? options.Value.RuntimeConfigPath : Path.Combine(environment.ContentRootPath, options.Value.RuntimeConfigPath);

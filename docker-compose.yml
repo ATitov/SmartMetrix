@@ -40,11 +40,15 @@ services:
       context: .
       dockerfile: src/Services/SmartMetrix.StorageService/Dockerfile
     environment:
+      Persistence__Provider: Postgres
+      ConnectionStrings__SmartMetrix: "Host=postgres;Database=smartmetrix;Username=smartmetrix;Password=${POSTGRES_PASSWORD:-smartmetrix-dev}"
       Storage__Endpoint: http://minio:9000
       Storage__AccessKey: smartmetrix
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-smartmetrix-dev-secret}
     ports: ["5105:8080"]
     depends_on:
+      postgres:
+        condition: service_healthy
       minio:
         condition: service_healthy
 

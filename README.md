@@ -14,8 +14,13 @@ Edge-платформа для оценки блочности и трещино
 
 ## Структура
 
+- [Веб-интерфейс и пять АРМ](docs/web-gui.md) — целевые экраны, роли, права и требования к GUI.
+- [Формальные требования GUI](docs/gui-requirements.md), [адаптивные макеты](docs/gui-prototype/index.html) и [браузерные тесты](tools/gui-tests/README.md).
+- [API пяти АРМ на ASP.NET Core](docs/workstation-api.md) — контракт v1, права, источники, настройка, миграция и ограничения.
+
 - `src/BuildingBlocks` — доменная модель и версионируемые контракты сообщений.
 - `src/Services` — независимо развёртываемые сервисы.
+- `StoneVision` — Python-сервис YOLO + MobileSAM (Git submodule); [подключение к конвейеру](docs/stonevision.md).
 - `docs/architecture.md` — поток измерения и ответственность сервисов.
 - `docker-compose.yml` — локальная инфраструктура разработки.
 
@@ -29,6 +34,17 @@ dotnet run --project src/Services/SmartMetrix.MeasurementOrchestrator
 ```
 
 ## Локальная проверка
+
+Требования и критерии приёмки всех 14 сервисов, существующие проверки и открытые
+разрывы описаны в [docs/service-requirements.md](docs/service-requirements.md).
+Прогоны по ID требования, инфраструктурные проверки и сбор покрытия описаны в
+[docs/requirements-testing.md](docs/requirements-testing.md).
+
+Тестовый захват с IP-камер Hikvision через RTSP/FFmpeg описан в
+[`docs/rtsp-camera.md`](docs/rtsp-camera.md).
+
+Утилита калибровки A/B/C по шаблону ChArUco, создание карт ректификации и экспорт
+черновика описаны в [`tools/camera-calibration/README.md`](tools/camera-calibration/README.md).
 
 Рабочий HTTP-конвейер, настройка установки и сквозные испытания описаны в
 [`docs/measurement-pipeline.md`](docs/measurement-pipeline.md).

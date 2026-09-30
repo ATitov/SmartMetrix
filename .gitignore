@@ -1,5 +1,6 @@
 **/bin/
 **/obj/
+**/TestResults/
 .vs/
 .idea/
 .vscode/
@@ -10,5 +11,7 @@ deploy/edge/edge.env
 deploy/edge/deployment.env
 data/
 artifacts/
+.pnpm-store/
+tools/gui-tests/node_modules/
 models/*.engine
 models/*.onnx

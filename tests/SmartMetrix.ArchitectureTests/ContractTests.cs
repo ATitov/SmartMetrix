@@ -95,7 +95,7 @@ public sealed class ContractTests
             new InMemoryInboxStore(),
             (_, _) => { handled++; return Task.CompletedTask; });
         var envelope = EventEnvelope.Create(
-            new CaptureRequested(MeasurementId.New(), "operator", DateTimeOffset.UtcNow),
+            new CaptureRequested(MeasurementId.New(), "operator", DateTimeOffset.UtcNow, ExpiresAt: DateTimeOffset.UtcNow.AddSeconds(2)),
             "correlation-42");
 
         Assert.True(await handler.HandleAsync(envelope));

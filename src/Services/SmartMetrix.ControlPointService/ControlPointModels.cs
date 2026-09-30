@@ -21,7 +21,7 @@ public sealed record ControlPointView(string PointId, int Version, double XMetre
 public sealed record SurveyObservation(Guid Id, string PointId, double XMetres, double YMetres, double ZMetres,
     double AccuracyMillimetres, DateTimeOffset MeasuredAt, string InstrumentId, DateTimeOffset RecordedAt);
 public sealed record ControlPointAuditEntry(string PointId, string Action, DateTimeOffset At, string Actor, string? Details);
-public sealed record ControlPointUsage(string PointId, Guid MeasurementId, DateTimeOffset RecordedAt);
+public sealed record ControlPointUsage(string PointId, Guid MeasurementId, DateTimeOffset RecordedAt, int PointVersion = 0);
 public sealed record ImportError(int Item, string? PointId, string Field, string Message);
 public sealed record ImportReport(int Total, int Imported, IReadOnlyList<ImportError> Errors);
 

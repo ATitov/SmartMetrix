@@ -5,6 +5,7 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class ControlPointRegistryTests
 {
     [Fact]
+    [Trait("Requirement", "CPT-01")]
     public void UpdateCreatesVersionAndPreservesHistory()
     {
         var registry = Registry(); registry.Create(Create(), "alice");
@@ -15,6 +16,7 @@ public sealed class ControlPointRegistryTests
     }
 
     [Fact]
+    [Trait("Requirement", "CPT-01")]
     public void InactivePointCannotBeUsedAndUsedPointCannotBeDeleted()
     {
         var registry = Registry(); registry.Create(Create(), "test");
@@ -25,6 +27,7 @@ public sealed class ControlPointRegistryTests
     }
 
     [Fact]
+    [Trait("Requirement", "CPT-02")]
     public void CsvImportReportsEveryInvalidRow()
     {
         var csv = "pointId,x,y,z,unit,coordinateSystemId,accuracyMm,measuredAt,status,targetType,targetId\nCP-2,1,2,3,Metres,quarry:1,2,2026-01-01T00:00:00Z,Active,CodedVisualMark,M-2\nCP-3,no,2,3,Metres,quarry:1,-1,bad,Active,CodedVisualMark,M-3";
@@ -33,6 +36,7 @@ public sealed class ControlPointRegistryTests
     }
 
     [Fact]
+    [Trait("Requirement", "CPT-02")]
     public void GeoJsonRoundTripsAccuracyAndMeasurementDate()
     {
         var source = Registry(); source.Create(Create(), "test");

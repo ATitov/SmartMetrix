@@ -11,10 +11,10 @@ public readonly record struct OrganizedPoint(double XMetres, double YMetres, dou
 }
 
 public sealed record AnalysisArtifactReferences(Uri PointCloudUri, Uri MaskUri, Uri DepthConfidenceUri,
-    Uri SegmentationConfidenceUri, string CalibrationId);
+    Uri SegmentationConfidenceUri, string CalibrationId, Uri? InstanceMapUri = null);
 public sealed record BlockAnalysisRequest(int Width, int Height, IReadOnlyList<OrganizedPoint> Points,
     IReadOnlyList<byte> Mask, IReadOnlyList<float> SegmentationConfidence, double CalibrationConfidence,
-    string CoordinateSystemId, AnalysisArtifactReferences Artifacts);
+    string CoordinateSystemId, AnalysisArtifactReferences Artifacts, IReadOnlyList<int>? InstanceLabels = null);
 
 public sealed record AlgorithmProvenance(string Name, string Version, IReadOnlyDictionary<string, double> Parameters);
 public sealed record BlockGeometry(double MajorAxisMillimetres, double IntermediateAxisMillimetres,
@@ -22,7 +22,7 @@ public sealed record BlockGeometry(double MajorAxisMillimetres, double Intermedi
     double VolumeCubicMillimetres);
 public sealed record AnalysedBlock(Guid BlockId, Guid MeasurementId, string CoordinateSystemId, LocalPoint Centre,
     BlockGeometry Geometry, bool IsValid, bool IsPartiallyVisible, double Confidence,
-    IReadOnlyList<string> QualityReasons, AnalysisArtifactReferences SourceArtifacts);
+    IReadOnlyList<string> QualityReasons, AnalysisArtifactReferences SourceArtifacts, int? SourceInstanceId = null);
 public sealed record BlockAnalysisResult(Guid MeasurementId, string LengthUnit, string AreaUnit, string VolumeUnit,
     IReadOnlyList<AnalysedBlock> Blocks, IReadOnlyDictionary<string, int> SizeClasses,
     double D10Millimetres, double D50Millimetres, double D80Millimetres, double D95Millimetres,

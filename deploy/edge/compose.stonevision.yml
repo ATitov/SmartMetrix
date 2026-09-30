@@ -1,0 +1,12 @@
+# Connect Jetson to an independently deployed StoneVision service.
+services:
+  segmentation-service:
+    environment:
+      Segmentation__Backend: StoneVision
+      Segmentation__StoneVisionBaseUrl: ${STONEVISION_URL:?set STONEVISION_URL reachable from the edge backend network}
+      Segmentation__StoneVisionTimeoutSeconds: 180
+      Segmentation__ModelVersion: ${STONEVISION_MODEL_VERSION:?set STONEVISION_MODEL_VERSION to the deployed weights version}
+  measurement-orchestrator:
+    environment:
+      Pipeline__RequestTimeoutSeconds: 240
+      MeasurementWorkflow__StageTimeoutSeconds: 900

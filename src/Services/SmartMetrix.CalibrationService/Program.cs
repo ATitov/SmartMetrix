@@ -1,9 +1,15 @@
+using SmartMetrix.Persistence;
 using SmartMetrix.ServiceDefaults;
 using SmartMetrix.CalibrationService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
-builder.Services.Configure<CalibrationOptions>(builder.Configuration.GetSection(CalibrationOptions.SectionName));
+builder.AddSmartMetrixPersistence("calibration");
+builder.Services.AddOptions<CalibrationOptions>().Bind(builder.Configuration.GetSection(CalibrationOptions.SectionName))
+    .Validate(options => double.IsFinite(options.MaximumReprojectionErrorPixels) && options.MaximumReprojectionErrorPixels > 0 &&
+        double.IsFinite(options.BaselineToleranceMetres) && options.BaselineToleranceMetres >= 0 &&
+        new[] { options.ExpectedGeometry.AbMetres, options.ExpectedGeometry.BcMetres, options.ExpectedGeometry.AcMetres }.All(x => double.IsFinite(x) && x > 0),
+        "Calibration thresholds and expected baselines must be finite and valid.").ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CalibrationRegistry>();
 

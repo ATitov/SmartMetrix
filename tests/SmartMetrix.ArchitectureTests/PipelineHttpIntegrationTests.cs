@@ -18,9 +18,69 @@ using SmartMetrix.Domain;
 namespace SmartMetrix.ArchitectureTests;
 
 // Real service executables and HTTP serialization, with a local immutable artifact server instead of MinIO.
+[Collection("ServiceProcesses")]
 public sealed class PipelineHttpIntegrationTests
 {
+    private static readonly int[] ExpectedInstanceIds = [1, 2];
     [Fact]
+    public async Task StoneVisionBackendCompletesTheHttpPipeline()
+    {
+        await using var rig = new PipelineTestRig { UseStoneVision = true };
+        await rig.StartAsync();
+        await rig.ConfigureRigAsync();
+        var measurement = await rig.PostAsync<MeasurementProcess>("orchestrator", "measurements",
+            new StartMeasurementRequest(Guid.NewGuid(), null, "EX-TEST", "quarry:test", "StoneVision integration"));
+        var completed = await rig.WaitForTerminalAsync(measurement.Id);
+        Assert.True(completed.Status == MeasurementStatus.Completed, JsonSerializer.Serialize(completed, PipelineJson.Options) + rig.Logs);
+        var segmentation = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{measurement.Id}/stages/segmentation");
+        Assert.False(segmentation.GetProperty("isTestData").GetBoolean());
+        Assert.Equal("stonevision-http-test", segmentation.GetProperty("event").GetProperty("modelVersion").GetString());
+        Assert.Equal(8192, segmentation.GetProperty("classPixelCounts").GetProperty("Rock").GetInt32());
+        Assert.True(completed.IsTestData); // The camera simulator still marks the overall measurement.
+        var raw = await rig.GetAsync<JsonElement>("storage", $"v1/measurements/{completed.Pipeline!.RunId}/artifacts/download/segmentation/stonevision.json");
+        Assert.True(raw.GetProperty("success").GetBoolean());
+        Assert.Equal(2, segmentation.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("A", segmentation.GetProperty("image").GetProperty("cameraId").GetString());
+        Assert.Equal(2, segmentation.GetProperty("instances").GetArrayLength());
+        var analysis = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{measurement.Id}/stages/analysis");
+        Assert.NotEmpty(analysis.GetProperty("blocks").EnumerateArray());
+        Assert.Equal(ExpectedInstanceIds, analysis.GetProperty("blocks").EnumerateArray()
+            .Select(block => block.GetProperty("sourceInstanceId").GetInt32()).Distinct().Order());
+        Assert.All(analysis.GetProperty("blocks").EnumerateArray(), block =>
+            Assert.EndsWith("/segmentation/instances.json", block.GetProperty("sourceArtifacts").GetProperty("instanceMapUri").GetString()));
+        var capabilities = await rig.GetAsync<JsonElement>("segmentation", "v1/segmentation/capabilities");
+        Assert.True(capabilities.GetProperty("supportsInstances").GetBoolean());
+        using var invalid = await rig.PostResponseAsync("segmentation", $"v1/measurements/{Guid.NewGuid()}/segmentation",
+            new { frame = new { width = 1, height = 1, channels = 3, pixelFormat = "RGB8", pixels = new byte[3] }, detection = new { tileSize = 1 } });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        Assert.Equal("InvalidSegmentationRequest", (await invalid.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("title").GetString());
+        rig.StoneVisionInvalidResponse = true;
+        using var badBackend = await rig.PostResponseAsync("segmentation", $"v1/measurements/{Guid.NewGuid()}/segmentation",
+            new { frame = new { width = 128, height = 64, channels = 3, pixelFormat = "RGB8", pixels = new byte[128 * 64 * 3] } });
+        Assert.Equal(HttpStatusCode.BadGateway, badBackend.StatusCode);
+        Assert.Equal("InvalidSegmentationResponse", (await badBackend.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task RectificationMapsReachDepthAndKeepAnalysisOnOriginalCameraGrid()
+    {
+        await using var rig = new PipelineTestRig();
+        await rig.StartAsync();
+        await rig.ConfigureRigAsync(rectification: true);
+        var measurement = await rig.PostAsync<MeasurementProcess>("orchestrator", "measurements",
+            new StartMeasurementRequest(Guid.NewGuid(), null, "EX-TEST", "quarry:test", "rectification"));
+        var result = await rig.WaitForTerminalAsync(measurement.Id);
+        Assert.True(result.Status == MeasurementStatus.Completed, JsonSerializer.Serialize(result, PipelineJson.Options) + rig.Logs);
+        var depth = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{result.Id}/stages/depth");
+        Assert.Equal("CameraAOriginal", depth.GetProperty("pixelGrid").GetString());
+        Assert.Equal(3, depth.GetProperty("rectificationChecksums").EnumerateObject().Count());
+        Assert.True(depth.GetProperty("selectedBaselines").GetProperty("BC").GetInt32() > 0);
+        Assert.True(result.D50 > 0);
+        Assert.True(result.BlockCount > 0);
+    }
+
+    [Fact]
+    [Trait("Requirement", "ORC-02")]
     public async Task ServicesCompleteMeasurementAndRejectBadFramesWithoutSyntheticResults()
     {
         await using var rig = new PipelineTestRig();
@@ -76,6 +136,7 @@ public sealed class PipelineHttpIntegrationTests
     }
 
     [Fact]
+    [Trait("Requirement", "ORC-03")]
     public async Task CancellationAndRestartPreserveCheckpointsAndRetriesAreBounded()
     {
         await using var rig = new PipelineTestRig();
@@ -137,9 +198,16 @@ internal sealed class PipelineTestRig : IAsyncDisposable
     private readonly HttpClient _client = new() { Timeout = TimeSpan.FromSeconds(10) };
     private WebApplication? _storage;
     public string Logs => string.Join('\n', _logs.TakeLast(30));
+    public bool UseStoneVision { get; init; }
+    public string? PostgresConnection { get; init; }
+    public bool StoneVisionInvalidResponse { get; set; }
     private static readonly string[] Services = ["CalibrationService", "CameraService", "QualityService", "DepthService", "SegmentationService", "BlockAnalysisService", "LocalPositioningService", "GeoreferenceService", "MeasurementOrchestrator"];
     private static readonly string[] Keys = ["calibration", "camera", "quality", "depth", "segmentation", "analysis", "positioning", "georeference", "orchestrator"];
     private static readonly string[] CameraIds = ["A", "B", "C"];
+    private static readonly int[] StoneVisionMaskSize = [64, 128];
+    // COCO runs are column-major: these two masks touch at the central column boundary.
+    private static readonly int[] StoneVisionLeftCounts = [0, 4096, 4096];
+    private static readonly int[] StoneVisionRightCounts = [4096, 4096];
 
     public async Task StartAsync()
     {
@@ -150,6 +218,35 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         builder.WebHost.UseUrls(_urls["storage"]);
         builder.Logging.ClearProviders();
         _storage = builder.Build();
+        if (UseStoneVision)
+        {
+            _storage.MapGet("/health", () => Results.Ok(new { models_loaded = true }));
+            _storage.MapPost("/detect_json", async (HttpRequest request) =>
+            {
+                var form = await request.ReadFormAsync();
+                var file = form.Files.GetFile("image");
+                Assert.NotNull(file);
+                using var image = new MemoryStream();
+                await file.CopyToAsync(image);
+                var header = System.Text.Encoding.ASCII.GetBytes("P6\n128 64\n255\n");
+                Assert.Equal(header, image.ToArray()[..header.Length]);
+                Assert.Equal(header.Length + 128 * 64 * 3, image.Length);
+                if (StoneVisionInvalidResponse) return Results.Json(new { success = false });
+                return Results.Json(new
+                {
+                    success = true,
+                    coco_format = new
+                    {
+                        images = new[] { new { id = 1, width = 128, height = 64 } },
+                        annotations = new[] {
+                            new { id = 1, image_id = 1, category_id = 1, yolo_confidence = .9,
+                                segmentation = new { size = StoneVisionMaskSize, counts = StoneVisionLeftCounts } },
+                            new { id = 2, image_id = 1, category_id = 1, yolo_confidence = .9,
+                                segmentation = new { size = StoneVisionMaskSize, counts = StoneVisionRightCounts } } }
+                    }
+                });
+            });
+        }
         _storage.MapPut("/v1/measurements/{id:guid}/artifacts/{**path}", async (Guid id, string path, HttpRequest request) =>
         {
             using var buffer = new MemoryStream();
@@ -215,6 +312,9 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         start.ArgumentList.Add(assembly);
         start.Environment["ASPNETCORE_URLS"] = _urls[key];
         start.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        start.Environment["Messaging__DispatchEnabled"] = "false";
+        start.Environment["Persistence__Provider"] = PostgresConnection is null ? "File" : "Postgres";
+        if (PostgresConnection is not null) start.Environment["ConnectionStrings__SmartMetrix"] = PostgresConnection;
         start.Environment["Logging__LogLevel__Default"] = "Warning";
         start.Environment["Camera__Adapter"] = "Simulator";
         start.Environment["Camera__CameraASerialNumber"] = "A";
@@ -224,10 +324,17 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         start.Environment["Camera__StorageServiceUrl"] = _urls["storage"];
         start.Environment["Depth__StorageBaseUrl"] = _urls["storage"];
         start.Environment["Depth__Backend"] = "Cpu";
+        start.Environment["Depth__CalibrationDirectory"] = Path.Combine(_directory, "calibration-maps");
         start.Environment["Depth__MaximumDisparity"] = "20";
         start.Environment["Depth__MinimumSpeckleSize"] = "4";
         start.Environment["Quality__Scenes__default__Version"] = "http-test-v1";
         start.Environment["Segmentation__StorageBaseUrl"] = _urls["storage"];
+        start.Environment["Segmentation__Backend"] = UseStoneVision ? "StoneVision" : "Deterministic";
+        if (UseStoneVision)
+        {
+            start.Environment["Segmentation__StoneVisionBaseUrl"] = _urls["storage"];
+            start.Environment["Segmentation__ModelVersion"] = "stonevision-http-test";
+        }
         start.Environment["Segmentation__InputWidth"] = "32";
         start.Environment["Segmentation__InputHeight"] = "32";
         start.Environment["Segmentation__TileOverlap"] = "4";
@@ -247,12 +354,27 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         _processes.Add(process);
     }
 
-    public async Task ConfigureRigAsync()
+    public async Task ConfigureRigAsync(bool rectification = false)
     {
         double[] identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];
         var payload = new CalibrationPayload("rig-test", CameraIds.Select(id => new CameraCalibration(id,
-            new(80, 80, 64, 32, 128, 64), [0], identity, [0, 0, 0], "s3://calibration/identity")).ToArray(),
+            new(80, 80, 64, 32, 128, 64), [0, 0, 0, 0, 0], identity, [0, 0, 0], "s3://calibration/identity")).ToArray(),
             new(.7, .8, 1.5), new(identity, [0, 0, 0]), .1);
+        if (rectification)
+        {
+            var root = Path.Combine(_directory, "calibration-maps");
+            var hashB = RectificationTests.WriteMaps(root, "AB.npz", 128, 64, 2);
+            var hashC = RectificationTests.WriteMaps(root, "AC.npz", 128, 64, 3);
+            var hashBc = RectificationTests.WriteMaps(root, "BC.npz", 128, 64, 1);
+            payload = payload with
+            {
+                Rectification = new(2, 128, 64, "A", [
+                new("B", "AB.npz", hashB, 80, 80, 62, 32, .7, identity, "A", [0, 0, 0]),
+                new("C", "AC.npz", hashC, 80, 80, 61, 32, 1.5, identity, "A", [0, 0, 0]),
+                new("C", "BC.npz", hashBc, 80, 80, 63, 32, .8, identity, "B", [.7, 0, 0])],
+                new(80, 80, 64, 32, [0, 0, 0, 0, 0]))
+            };
+        }
         var record = await PostAsync<CalibrationRecord>("calibration", "api/calibrations/", payload);
         await PostAsync<CalibrationRecord>("calibration", $"api/calibrations/{record.Id}/activate",
             new ActivationRequest(DateTimeOffset.UtcNow.AddHours(-1), null, "test"));
@@ -306,6 +428,9 @@ internal sealed class PipelineTestRig : IAsyncDisposable
             await File.WriteAllBytesAsync(Path.Combine(_directory, "frames", $"camera-{(char)('a' + camera)}.raw"), bytes);
         }
     }
+
+    public Task<HttpResponseMessage> PostResponseAsync(string service, string path, object body) =>
+        _client.PostAsJsonAsync(_urls[service] + "/" + path, body, PipelineJson.Options);
 
     public async Task<T> PostAsync<T>(string service, string path, object body)
     {

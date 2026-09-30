@@ -6,6 +6,7 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class OperatorApiIntegrationTests
 {
     [Fact]
+    [Trait("Requirement", "API-02")]
     public async Task UnconfiguredDependenciesAreReportedWithoutSyntheticValues()
     {
         var options = Options.Create(new OperatorApiOptions
@@ -29,6 +30,7 @@ public sealed class OperatorApiIntegrationTests
     }
 
     [Fact]
+    [Trait("Requirement", "API-02")]
     public async Task ComponentFailuresProduceDegradedStatusWithoutLeakingAddresses()
     {
         var options = Options.Create(new OperatorApiOptions

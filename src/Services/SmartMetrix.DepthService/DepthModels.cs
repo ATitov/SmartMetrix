@@ -20,7 +20,8 @@ public sealed record DepthCalibrationBundle(
     int SchemaVersion,
     string CalibrationId,
     string CameraRigCoordinateSystemId,
-    IReadOnlyList<StereoPairCalibration> Pairs);
+    IReadOnlyList<StereoPairCalibration> Pairs,
+    StereoRectification? Rectification = null);
 
 public sealed record ReconstructionRequest(
     IReadOnlyList<GrayFrame> Frames,
@@ -42,7 +43,9 @@ public sealed record ReconstructionResult(
     int InvalidPixelCount,
     IReadOnlyDictionary<string, int> SelectedBaselines,
     Uri? OrganizedCloudUri = null,
-    string? Backend = null);
+    string? Backend = null,
+    string? PixelGrid = null,
+    IReadOnlyDictionary<string, string>? RectificationChecksums = null);
 
 public sealed record OrganizedDepthPoint(double XMetres, double YMetres, double ZMetres, double DepthConfidence);
 public sealed record OrganizedDepthCloud(int Width, int Height, IReadOnlyList<OrganizedDepthPoint> Points);
@@ -62,6 +65,7 @@ public sealed class DepthOptions
     public double NearDistanceMetres { get; set; } = 1.0;
     public double FarDistanceMetres { get; set; } = 20.0;
     public string StorageBaseUrl { get; set; } = "http://storage-service:8080";
+    public string CalibrationDirectory { get; set; } = "";
 }
 
 public sealed class StereoBackendNotConfiguredException(string message) : InvalidOperationException(message);

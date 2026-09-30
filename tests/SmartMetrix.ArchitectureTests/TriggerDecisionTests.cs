@@ -5,7 +5,7 @@ using SmartMetrix.TriggerService;
 
 namespace SmartMetrix.ArchitectureTests;
 
-public sealed class TriggerDecisionTests
+public sealed partial class TriggerDecisionTests
 {
     private static readonly TriggerSnapshot Safe = new(0, 0, 0.05, 0.1, 20, true, true, false, false);
 
@@ -28,6 +28,7 @@ public sealed class TriggerDecisionTests
     }
 
     [Fact]
+    [Trait("Requirement", "TRG-02")]
     public void StableSafeInputIsAcceptedAfterDebounce()
     {
         var engine = CreateEngine(out var clock);
@@ -69,23 +70,66 @@ public sealed class TriggerDecisionTests
     }
 
     [Fact]
-    public async Task AcceptedDecisionEnqueuesCaptureRequestWithDiagnostics()
+    [Trait("Requirement", "TRG-03")]
+    public async Task AcceptedDecisionPublishesCaptureRequestWithDiagnostics()
     {
         var engine = CreateEngine(out var clock);
-        var outbox = new InMemoryOutboxStore();
-        var coordinator = new TriggerCoordinator(engine, clock, outbox);
+        var publisher = new RecordingPublisher();
+        var coordinator = new TriggerCoordinator(engine, clock, publisher, Options.Create(new TriggerOptions()));
         await coordinator.EvaluateAsync(Safe, CancellationToken.None);
         clock.Advance(TimeSpan.FromSeconds(1));
 
         var result = await coordinator.EvaluateAsync(Safe, CancellationToken.None);
 
         Assert.NotNull(result.MeasurementId);
-        var message = Assert.Single(await outbox.GetPendingAsync(10, CancellationToken.None));
+        var message = Assert.Single(publisher.Messages);
         Assert.Equal(EventSubjects.For<CaptureRequested>(), message.Subject);
         var envelope = EventEnvelopeSerializer.Deserialize<CaptureRequested>(message.Payload);
         Assert.Equal("AutomaticConditionsSatisfied", envelope.Data.Reason);
         Assert.Equal(20, envelope.Data.Inputs?.DistanceMetres);
         Assert.Equal(result.MeasurementId, envelope.Data.MeasurementId.Value);
+    }
+
+    [Theory]
+    [Trait("Requirement", "TRG-01")]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void EveryNonFiniteSensorIsRejectedEvenForManualCapture(double value)
+    {
+        var input = Safe with { ManualCommand = true };
+        TriggerSnapshot[] cases = [
+            input with { CanSpeedMetresPerSecond = value },
+            input with { EncoderSpeedMetresPerSecond = value },
+            input with { VibrationRmsMetresPerSecondSquared = value },
+            input with { AngularVelocityDegreesPerSecond = value },
+            input with { DistanceMetres = value }];
+        foreach (var sample in cases)
+        {
+            var decision = CreateEngine(out _).Evaluate(sample);
+            Assert.False(decision.Accepted);
+            Assert.Equal("InvalidSensorReading", decision.Reason);
+        }
+    }
+
+    [Theory]
+    [Trait("Requirement", "TRG-01")]
+    [InlineData(12)]
+    [InlineData(30)]
+    public void InclusiveSafetyLimitsAllowCaptureAfterDebounce(double distance)
+    {
+        var engine = CreateEngine(out var clock);
+        var input = Safe with
+        {
+            DistanceMetres = distance,
+            CanSpeedMetresPerSecond = -.05,
+            EncoderSpeedMetresPerSecond = .05,
+            VibrationRmsMetresPerSecondSquared = .15,
+            AngularVelocityDegreesPerSecond = -.5
+        };
+        Assert.Equal("Debouncing", engine.Evaluate(input).Reason);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(engine.Evaluate(input).Accepted);
     }
 
     private static TriggerDecisionEngine CreateEngine(out ManualTimeProvider clock)

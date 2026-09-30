@@ -14,6 +14,11 @@ async function api(path, options = {}) {
   const base = path.startsWith('/auth/') || path.startsWith('/admin/') ? '/api' : '/api/operator';
   const headers = { ...options.headers, 'Content-Type':'application/json' };
   if (apiKey?.value) headers['X-API-Key'] = apiKey.value;
+  if (!apiKey?.value && options.method && !['GET','HEAD'].includes(options.method.toUpperCase())) {
+    const csrf = await fetch('/api/auth/csrf', { credentials:'same-origin' });
+    if (!csrf.ok) throw new Error('Не удалось получить токен сессии');
+    headers['X-CSRF-Token'] = (await csrf.json()).token;
+  }
   const response = await fetch(base + path, { ...options, credentials:'same-origin', headers });
   if (response.status === 401) {
     location.assign(`/login/?return=${encodeURIComponent(location.pathname)}`);
