@@ -12,8 +12,6 @@ public sealed class PipelineOptions
     public bool FramesAreRectified { get; set; }
     public string CameraRigCoordinateSystemId { get; set; } = "camera-rig";
     public string PlatformCoordinateSystemId { get; set; } = "platform";
-    [Range(0, 1)] public double CalibrationConfidence { get; set; } = 1;
-    public double[] StaticTransformCovariance { get; set; } = new double[36];
     [Range(1, 10)] public int MaximumAttempts { get; set; } = 3;
     [Range(1, 60)] public int RetryDelaySeconds { get; set; } = 2;
     [Range(1, 300)] public int RequestTimeoutSeconds { get; set; } = 60;

@@ -29,7 +29,7 @@ public sealed class TriggerCoordinator(TriggerDecisionEngine engine, TimeProvide
         var inputs = new CaptureDecisionInputs(snapshot.CanSpeedMetresPerSecond, snapshot.EncoderSpeedMetresPerSecond,
             snapshot.VibrationRmsMetresPerSecondSquared, snapshot.AngularVelocityDegreesPerSecond,
             snapshot.DistanceMetres, snapshot.CamerasReady, snapshot.ManualCommand, snapshot.ManualInhibit);
-        var request = new CaptureRequested(measurementId, decision.Reason, decision.EvaluatedAt, inputs, expiresAt);
+        var request = new CaptureRequested(measurementId, decision.Reason, decision.EvaluatedAt, inputs, expiresAt, options.RigId, options.ExcavatorId);
         var envelope = new EventEnvelope<CaptureRequested>(Guid.NewGuid(), EventEnvelope.CurrentSchemaVersion,
             decision.EvaluatedAt, measurementId.ToString(), request);
         // Construct once: every attempt uses the identical id, payload and original deadline.

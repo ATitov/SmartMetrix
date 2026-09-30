@@ -9,6 +9,8 @@ namespace SmartMetrix.TriggerService;
 public sealed class TriggerOptions
 {
     public const string SectionName = "Trigger";
+    public string? RigId { get; set; }
+    public string? ExcavatorId { get; set; }
 
     [Range(0, double.MaxValue)] public double MaximumCanSpeedMetresPerSecond { get; set; } = 0.05;
     [Range(0, double.MaxValue)] public double MaximumEncoderSpeedMetresPerSecond { get; set; } = 0.05;

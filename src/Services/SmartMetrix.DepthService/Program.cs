@@ -3,24 +3,34 @@ using SmartMetrix.DepthService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
-builder.Services.AddOptions<DepthOptions>().Bind(builder.Configuration.GetSection(DepthOptions.SectionName)).ValidateOnStart();
+builder.AddRuntimeSettings<DepthOptions>(DepthOptions.SectionName, "MinimumDisparity", "MaximumDisparity", "MatchRadius",
+    "LeftRightTolerancePixels", "MinimumSpeckleSize", "MinimumConfidence", "UniquenessRatio", "NearDistanceMetres", "FarDistanceMetres");
+builder.Services.AddOptions<DepthOptions>().Bind(builder.Configuration.GetSection(DepthOptions.SectionName))
+    .Validate(x => x.IsValid(), "Invalid stereo configuration.").ValidateOnStart();
 builder.Services.AddHttpClient<IDepthArtifactStore, HttpDepthArtifactStore>();
-builder.Services.AddSingleton<CpuStereoBackend>();
-builder.Services.AddSingleton<NativeStereoBackend>();
-builder.Services.AddSingleton<IStereoBackend>(services =>
+builder.Services.AddTransient<IStereoBackend>(services =>
 {
-    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<DepthOptions>>().Value;
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<DepthOptions>>().CurrentValue;
+    var snapshot = Microsoft.Extensions.Options.Options.Create(options);
     return options.Backend.Equals("Cpu", StringComparison.OrdinalIgnoreCase)
-        ? services.GetRequiredService<CpuStereoBackend>()
+        ? new CpuStereoBackend(snapshot)
         : options.Backend.Equals("Native", StringComparison.OrdinalIgnoreCase)
-            ? services.GetRequiredService<NativeStereoBackend>()
+            ? new NativeStereoBackend(snapshot)
             : throw new StereoBackendNotConfiguredException($"Unknown stereo backend '{options.Backend}'.");
 });
-builder.Services.AddSingleton<DepthReconstructor>();
+builder.Services.AddTransient(services =>
+{
+    var snapshot = Microsoft.Extensions.Options.Options.Create(
+        services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<DepthOptions>>().CurrentValue);
+    IStereoBackend backend = snapshot.Value.Backend == "Cpu" ? new CpuStereoBackend(snapshot) : new NativeStereoBackend(snapshot);
+    return new DepthReconstructor(backend, services.GetRequiredService<IDepthArtifactStore>(), snapshot);
+});
+builder.Services.AddHealthChecks().AddCheck<DepthBackendHealthCheck>("depth-backend", tags: ["ready"]);
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
 app.MapSmartMetrixDefaultEndpoints();
+app.MapRuntimeSettings<DepthOptions>();
 app.MapPost("/v1/measurements/{measurementId:guid}/reconstruction", async (
     Guid measurementId, ReconstructionRequest request, DepthReconstructor reconstructor, CancellationToken cancellationToken) =>
 {

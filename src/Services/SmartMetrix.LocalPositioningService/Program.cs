@@ -9,6 +9,11 @@ builder.Services.Configure<PositioningOptions>(builder.Configuration.GetSection(
 builder.Services.AddSingleton<TransformRegistry>();
 builder.Services.AddSingleton<PoseResolver>();
 builder.Services.AddSingleton<PositioningSampleBuffer>();
+builder.Services.AddOptions<PositioningStreamOptions>().Bind(builder.Configuration.GetSection("PositioningStreams"))
+    .Validate(x => x.IsValid(), "Invalid positioning stream sources.").ValidateOnStart();
+builder.Services.AddSingleton<PositioningStreamWorker>();
+builder.Services.AddHostedService(services => services.GetRequiredService<PositioningStreamWorker>());
+builder.Services.AddHealthChecks().AddCheck<PositioningStreamWorker>("positioning-streams", tags: ["ready"]);
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.IncludeFields = true);
 
 var app = builder.Build();

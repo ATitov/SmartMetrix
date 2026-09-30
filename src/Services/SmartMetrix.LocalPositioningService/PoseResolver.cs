@@ -12,6 +12,8 @@ public sealed class PoseResolver(TransformRegistry transforms, IOptions<Position
     {
         if (request.HardwareTimestampNanoseconds < 0) throw new ArgumentException("Hardware timestamp must be non-negative.");
         var groups = request.Samples.GroupBy(x => (x.SourceType, x.SourceId)).ToArray();
+        if (request.Samples.Select(x => x.ClockId).Distinct().Count() > 1)
+            throw new PoseUnavailableException("ClockMismatch", "All positioning samples must use the exposure hardware clock.");
         if (groups.Length == 0) throw new PoseUnavailableException("NoSamples", "No positioning samples were supplied.");
 
         var estimates = groups.Select(group => Interpolate(group.OrderBy(x => x.HardwareTimestampNanoseconds).ToArray(), request.HardwareTimestampNanoseconds)).ToArray();
@@ -51,7 +53,8 @@ public sealed class PoseResolver(TransformRegistry transforms, IOptions<Position
         Vector3? position = before.PositionMetres is { } p0 && after.PositionMetres is { } p1 ? Vector3.Lerp(p0, p1, t) : before.PositionMetres ?? after.PositionMetres;
         Quaternion? orientation = before.Orientation is { } q0 && after.Orientation is { } q1 ? Quaternion.Normalize(Quaternion.Slerp(q0, q1, t)) : before.Orientation ?? after.Orientation;
         var covariance = before.Covariance.Zip(after.Covariance, (a, b) => a + (b - a) * t).ToArray();
-        return new(position, orientation, covariance, new(before.SourceType, before.SourceId, before.HardwareTimestampNanoseconds, after.HardwareTimestampNanoseconds));
+        return new(position, orientation, covariance, new(before.SourceType, before.SourceId, before.HardwareTimestampNanoseconds, after.HardwareTimestampNanoseconds,
+            before.ClockId, before.ProtocolVersion));
     }
 
     private static Quaternion AverageRotations(IEnumerable<Quaternion> values)

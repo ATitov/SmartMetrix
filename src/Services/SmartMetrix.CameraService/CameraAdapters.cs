@@ -13,10 +13,35 @@ public sealed class ArenaCameraAdapter(IOptions<CameraOptions> configured) : ICa
 {
     private const string LibraryName = "smartmetrix_arena";
     private const int AbiVersion = 2;
-    private readonly CameraOptions options = configured.Value;
+    private CameraOptions options = configured.Value;
     private nint context;
     private readonly object sync = new();
     public string Name => "Arena";
+
+    public void ApplyConfiguration(CameraOptions value)
+    {
+        lock (sync)
+        {
+            // Hardware access is serialized with capture; changing exposure recreates the SDK context.
+            if (context != 0) { Native.Destroy(context); context = 0; }
+            options = value;
+            CheckReadiness();
+        }
+    }
+
+    public void CheckReadiness()
+    {
+        lock (sync)
+        {
+            try
+            {
+                if (Native.Probe() != AbiVersion) throw new CameraCaptureException("NotConfigured", "Arena library is a diagnostic stub or incompatible build.", 503);
+                EnsureInitialized();
+            }
+            catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+            { throw new CameraCaptureException("NotConfigured", "Arena library with readiness ABI is not installed.", 503); }
+        }
+    }
 
     public Task<IReadOnlyList<CapturedFrame>> CaptureAsync(CancellationToken cancellationToken)
     {
@@ -131,6 +156,7 @@ public sealed class ArenaCameraAdapter(IOptions<CameraOptions> configured) : ICa
     [StructLayout(LayoutKind.Sequential)] private struct NativeFrameSet { public nint Frames; public int Count; }
     private static class Native
     {
+        [DllImport(LibraryName, EntryPoint = "smartmetrix_arena_probe")] internal static extern int Probe();
         [DllImport(LibraryName, EntryPoint = "smartmetrix_arena_create")] internal static extern ArenaStatus Create(ref NativeConfiguration configuration, out nint context);
         [DllImport(LibraryName, EntryPoint = "smartmetrix_arena_capture")] internal static extern ArenaStatus Capture(nint context, out NativeFrameSet frameSet);
         [DllImport(LibraryName, EntryPoint = "smartmetrix_arena_release_frame_set")] internal static extern void ReleaseFrameSet(nint context, ref NativeFrameSet frameSet);

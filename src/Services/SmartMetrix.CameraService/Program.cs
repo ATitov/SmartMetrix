@@ -4,13 +4,17 @@ using SmartMetrix.CameraService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddRuntimeSettings<CameraOptions>(CameraOptions.SectionName, "ExposureMicroseconds");
 builder.AddSmartMetrixPersistence("camera");
 builder.Services.AddCameraCapture(builder.Configuration);
+builder.Services.AddSingleton<IRuntimeSettingsApplier<CameraOptions>, CameraRuntimeSettingsApplier>();
+builder.Services.AddHealthChecks().AddCheck<CameraBackendHealthCheck>("camera-backend", tags: ["ready"]);
 builder.Services.AddSingleton<CaptureReceiptStore>();
 
 var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
 app.MapSmartMetrixDefaultEndpoints();
+app.MapRuntimeSettings<CameraOptions>();
 
 // A single-camera diagnostic needs neither calibration nor StorageService.
 // Only configured IDs are accepted; callers cannot supply arbitrary stream URLs.

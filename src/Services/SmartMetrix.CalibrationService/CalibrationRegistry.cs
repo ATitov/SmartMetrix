@@ -99,6 +99,11 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     private void ValidatePayload(CalibrationPayload payload, bool validateError)
     {
+        if (payload.Accuracy is { } accuracy)
+        {
+            try { accuracy.Validate(); }
+            catch (ArgumentException exception) { throw new CalibrationValidationException(exception.Message); }
+        }
         if (string.IsNullOrWhiteSpace(payload.RigId)) throw new CalibrationValidationException("rigId is required.");
         if (payload.Cameras.Count != 3 || !payload.Cameras.Select(x => x.CameraId.ToUpperInvariant()).Order().SequenceEqual(CameraIds)) throw new CalibrationValidationException("Exactly cameras A, B and C are required.");
         var expected = _options.ExpectedGeometry;

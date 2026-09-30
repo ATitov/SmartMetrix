@@ -25,7 +25,13 @@ public sealed record QualityResult(
     string ThresholdVersion,
     IReadOnlyList<FrameQualityMetrics> Frames,
     IReadOnlyList<string> ReasonCodes,
-    DateTimeOffset AssessedAt);
+    DateTimeOffset AssessedAt)
+{
+    public QualityMetricProfile? MetricProfile { get; init; }
+    public QualityThresholds? ThresholdProfile { get; init; }
+    public string ContaminationMethod { get; init; } = "unknown";
+    public string InputSha256 { get; init; } = "";
+}
 
 public static class QualityReasonCodes
 {

@@ -1,6 +1,9 @@
 const mode = document.body.dataset.mode;
 const apiKey = document.querySelector('#apiKey');
 const state = { status: null, measurements: [], audit: [], lastSuccess: null, refreshing: false };
+state.scopes = [];
+state.scopeId = null;
+state.roles = [];
 const labels = { Ready:'Готов', Degraded:'Ограниченно', Unavailable:'Недоступен', NotConfigured:'Не настроен', Requested:'Запрошено', Capturing:'Захват', QualityControl:'Контроль качества', Reconstructing:'Реконструкция глубины', Segmenting:'Сегментация', Persisting:'Сохранение', Analysing:'Анализ блоков', Georeferencing:'Геопривязка', Failed:'Ошибка', Rejected:'Отклонено', Completed:'Завершено' };
 
 const esc = value => { const node = document.createElement('span'); node.textContent = value ?? '—'; return node.innerHTML; };
@@ -11,7 +14,19 @@ const isActive = value => ['Requested','Capturing','QualityControl','Reconstruct
 const isProblem = value => ['Failed','Rejected','Degraded','Unavailable'].includes(value);
 
 async function api(path, options = {}) {
-  const base = path.startsWith('/auth/') || path.startsWith('/admin/') ? '/api' : '/api/operator';
+  if (state.scoped && !state.scopeId && !path.startsWith('/auth/') && !path.startsWith('/admin/') && path !== '/workstations')
+    throw new Error('У учётной записи нет доступных областей измерений');
+  let base = path.startsWith('/auth/') || path.startsWith('/admin/') ? '/api' : '/api/operator';
+  if (state.scopeId && !path.startsWith('/auth/') && !path.startsWith('/admin/')) {
+    base = `/api/v1/scopes/${encodeURIComponent(state.scopeId)}`;
+    if (path === '/status') path = '/operator/status';
+    else if (path === '/audit') path = '/engineer/audit';
+    else if (path.startsWith('/engineering/system') || path.startsWith('/engineering/logs')) {
+      base = '/api/v1'; path = path.replace('/engineering/', '/engineer/');
+    } else if (path.startsWith('/engineering/config')) path = path.replace('/engineering/', '/engineer/');
+    else if (options.method === 'POST' && /\/measurements\/[^/]+\/(cancel|retry)$/.test(path)) path = '/engineer' + path;
+  }
+  if (path === '/workstations') base = '/api/v1';
   const headers = { ...options.headers, 'Content-Type':'application/json' };
   if (apiKey?.value) headers['X-API-Key'] = apiKey.value;
   if (!apiKey?.value && options.method && !['GET','HEAD'].includes(options.method.toUpperCase())) {
@@ -30,14 +45,47 @@ async function api(path, options = {}) {
 
 async function loadIdentity() {
   const identity = await api('/auth/me');
+  state.roles = identity.roles || [identity.role];
+  const workstations = await api('/workstations');
+  state.scopes = workstations.scopes || [];
+  state.scoped = workstations.scoped;
+  const selector = document.querySelector('#scopeSelector');
+  selector.innerHTML = state.scopes.map(scope => `<option value="${esc(scope.id)}">${esc(scope.siteId)} · ${esc(scope.excavatorId)}</option>`).join('');
+  selector.hidden = state.scopes.length === 0;
+  state.scopeId = state.scopes[0]?.id || null;
+  updateScopeContext();
   const currentUser = document.querySelector('#currentUser');
   if (currentUser) currentUser.textContent = `${identity.displayName} · ${identity.role}`;
   const administration = document.querySelector('#userAdministration');
   if (administration) {
-    administration.hidden = identity.role !== 'administrator';
+    administration.hidden = !state.roles.includes('administrator');
     if (!administration.hidden) await loadUsers();
   }
+  if (state.scoped && state.scopes.length === 0) throw new Error('У учётной записи нет доступных областей измерений');
 }
+
+function updateScopeContext() {
+  const scope = state.scopes.find(item => item.id === state.scopeId);
+  const form = document.querySelector('#startForm');
+  if (form && scope) {
+    form.elements.excavatorId.value = scope.excavatorId;
+    form.elements.coordinateSystemId.value = scope.coordinateSystemId;
+    form.elements.excavatorId.readOnly = form.elements.coordinateSystemId.readOnly = true;
+    delete form.dataset.commandId; delete form.dataset.measurementId;
+  }
+  document.querySelector('#detailDialog')?.close();
+  document.querySelector('#commandDialog')?.close();
+  document.querySelector('#startDialog')?.close();
+}
+
+document.querySelector('#scopeSelector').addEventListener('change', async event => {
+  if (state.refreshing || state.applyingSettings) return;
+  state.scopeId = event.target.value;
+  state.measurements = []; state.audit = []; state.status = null; state.lastSuccess = null;
+  updateScopeContext();
+  await refresh();
+  if (mode === 'engineer') await loadEngineeringTools();
+});
 
 async function loadUsers() {
   const users = await api('/admin/users');
@@ -55,6 +103,7 @@ function toast(message, isError = false) {
 }
 
 function renderStatus(status) {
+  if (status.checks) state.status = status = { ...status, configured:true, components:status.checks.map(check => ({ ...check, kind:check.name })) };
   const root = document.querySelector('#systemState');
   root.innerHTML = `<div class="status-line ${cssState(status.state)}"><span class="dot"></span><b>${esc(label(status.state))}</b></div><div class="metric">${status.configured ? 'Система доступна' : 'Требуется настройка'}</div><div class="muted">Проверено ${date(status.checkedAt)}</div>`;
   document.querySelector('#activeMeasurement').textContent = status.activeMeasurementId || 'Нет активного измерения';
@@ -106,7 +155,7 @@ function renderAudit() {
 function renderConfiguration(components) {
   const root = document.querySelector('#configChecks');
   const checks = components.map(component => ({ name: component.name, detail: component.kind, ready: component.state === 'Ready' }));
-  checks.push({ name:'Инженерный API-доступ', detail:'Ключ принят шлюзом', ready:Boolean(apiKey.value) });
+  checks.push({ name:'Инженерный доступ', detail:'Права текущей сессии', ready:state.roles.includes('engineer') });
   root.innerHTML = checks.map(check => `<div class="config-row"><span class="status-line ${check.ready ? 'state-ready' : 'state-warning'}"><span class="dot"></span></span><div><b>${esc(check.name)}</b><small>${esc(check.detail)} · ${check.ready ? 'готово' : 'проверьте настройку'}</small></div></div>`).join('');
 }
 
@@ -145,10 +194,16 @@ document.addEventListener('click', async event => {
 async function loadEngineeringTools() {
   if (mode !== 'engineer') return;
   try {
+    const requestedScope = state.scopeId;
     const [system, config] = await Promise.all([api('/engineering/system'), api('/engineering/config')]);
+    if (requestedScope !== state.scopeId) return;
+    state.config = config;
     const drive = system.drives?.[0];
     document.querySelector('#systemMetrics').innerHTML = [['Компьютер',system.machine],['ОС',system.os],['Процессоры',system.processors],['Память процесса',Math.round(system.processMemoryBytes/1048576)+' МБ'],['Диск',drive ? `${drive.usedPercent}% занято` : '—'],['.NET',system.runtime]].map(([name,value]) => `<div class="config-row"><div><b>${esc(name)}</b><small>${esc(value)}</small></div></div>`).join('');
-    document.querySelector('#runtimeConfig').innerHTML = Object.entries(config).map(([name,value]) => `<label>${esc(name)}<input data-config="${esc(name)}" value="${esc(value)}"></label>`).join('');
+    if (state.scopeId) {
+      document.querySelector('#runtimeConfig').innerHTML = Object.entries(config).map(([service,snapshot]) =>
+        `<fieldset><legend>${esc(service)} · версия ${esc(snapshot.revision || 'unknown')}</legend>${snapshot.error ? `<p class="warning">${esc(snapshot.error)}</p>` : Object.entries(snapshot.values || {}).map(([name,value]) => `<label>${esc(name)}<input data-service="${esc(service)}" data-config="${esc(name)}" value="${esc(value)}"></label>`).join('')}</fieldset>`).join('');
+    } else document.querySelector('#runtimeConfig').innerHTML = '<p>Для применения настроек настройте область доступа к сервисам.</p>';
   } catch (error) { toast('Диагностика: '+error.message, true); }
 }
 
@@ -176,13 +231,14 @@ async function refresh() {
   const button = document.querySelector('#refresh');
   const banner = document.querySelector('#error');
   button.disabled = true;
+  document.querySelector('#scopeSelector').disabled = true;
   banner.hidden = true;
   try {
     const requests = [api('/status'), api('/measurements')];
     if (mode === 'engineer') requests.push(api('/audit'));
     const [status, measurements, audit = []] = await Promise.all(requests);
     state.status = status;
-    state.measurements = Array.isArray(measurements) ? measurements : [];
+    state.measurements = Array.isArray(measurements) ? measurements : measurements.items || [];
     state.audit = Array.isArray(audit) ? audit : [];
     state.lastSuccess = Date.now();
     renderStatus(status);
@@ -192,10 +248,11 @@ async function refresh() {
     renderKpis();
   } catch (error) {
     banner.hidden = false;
-    banner.textContent = apiKey.value ? `Не удалось получить данные: ${error.message}` : 'Введите API-ключ для загрузки данных';
+    banner.textContent = `Не удалось получить данные: ${error.message}`;
   } finally {
     state.refreshing = false;
     button.disabled = false;
+    document.querySelector('#scopeSelector').disabled = !!state.applyingSettings;
     updateFreshness();
   }
 }
@@ -233,10 +290,13 @@ document.querySelector('#startForm')?.addEventListener('submit', async event => 
   try {
     const data = new FormData(event.target);
     event.target.dataset.commandId ||= crypto.randomUUID();
-    await api('/measurements', { method:'POST', body:JSON.stringify({ commandId:event.target.dataset.commandId, excavatorId:data.get('excavatorId'), coordinateSystemId:data.get('coordinateSystemId'), reason:data.get('reason') }) });
+    event.target.dataset.measurementId ||= crypto.randomUUID();
+    await api('/measurements', { method:'POST', body:JSON.stringify({ commandId:event.target.dataset.commandId, measurementId:event.target.dataset.measurementId, excavatorId:data.get('excavatorId'), coordinateSystemId:data.get('coordinateSystemId'), reason:data.get('reason') }) });
     document.querySelector('#startDialog').close();
     event.target.reset();
     delete event.target.dataset.commandId;
+    delete event.target.dataset.measurementId;
+    updateScopeContext();
     toast('Измерение запущено');
     await refresh();
   } catch (error) { toast(error.message, true); } finally { submit.disabled = false; }
@@ -247,8 +307,12 @@ document.addEventListener('click', async event => {
   if (!target) return;
   if (target.dataset.detail) {
     try {
+      const requestedScope = state.scopeId;
       const value = await api(`/measurements/${target.dataset.detail}`);
-      renderResultVisual(value); renderPipeline(value);
+      if (requestedScope !== state.scopeId) return;
+      const measurement = value.measurement || value;
+      if (measurement.stages && !measurement.pipeline) measurement.pipeline = { stages:measurement.stages };
+      renderResultVisual(measurement); renderPipeline(measurement);
       document.querySelector('#detailJson').textContent = JSON.stringify(value, null, 2);
       document.querySelector('#detailDialog').showModal();
     } catch (error) { toast(error.message, true); }
@@ -301,8 +365,25 @@ document.querySelector('#printReport')?.addEventListener('click', () => window.p
 document.querySelector('#refreshSystem')?.addEventListener('click', loadEngineeringTools);
 document.querySelector('#loadLogs')?.addEventListener('click', loadLogs);
 document.querySelector('#saveConfig')?.addEventListener('click', async () => {
-  const values = Object.fromEntries([...document.querySelectorAll('[data-config]')].map(input => [input.dataset.config,input.value]));
-  try { await api('/engineering/config',{method:'PUT',body:JSON.stringify(values)}); toast('Конфигурация сохранена'); } catch(error) { toast(error.message,true); }
+  if (state.applyingSettings) return;
+  state.applyingSettings = true;
+  document.querySelector('#scopeSelector').disabled = true;
+  document.querySelector('#saveConfig').disabled = true;
+  try {
+    if (!state.scopeId) throw new Error('Выберите настроенную область доступа');
+    const groups = {};
+    document.querySelectorAll('[data-config]').forEach(input => { (groups[input.dataset.service] ||= {})[input.dataset.config] = input.value; });
+    if (Object.keys(groups).length === 0) throw new Error('Нет доступных настроек сервисов');
+    for (const [service,values] of Object.entries(groups)) {
+      await api(`/engineering/config/${encodeURIComponent(service)}`,{method:'PUT',body:JSON.stringify({ values, expectedRevision:state.config[service].revision })});
+    }
+    toast('Настройки применены сервисами'); await loadEngineeringTools();
+  } catch(error) { toast('Применение остановлено: '+error.message,true); await loadEngineeringTools(); }
+  finally {
+    state.applyingSettings = false;
+    document.querySelector('#scopeSelector').disabled = state.refreshing;
+    document.querySelector('#saveConfig').disabled = false;
+  }
 });
 
 async function boot() {
