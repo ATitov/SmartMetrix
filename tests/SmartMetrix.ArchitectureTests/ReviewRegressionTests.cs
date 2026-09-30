@@ -13,6 +13,43 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class ReviewRegressionTests
 {
+    [Fact]
+    public async Task MeasurementSnapshotsRemainReadableDuringConcurrentReplacement()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "measurement-snapshots-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = root });
+            await using var app = builder.Build();
+            var store = new JsonMeasurementStore(builder.Environment);
+            var workflow = new MeasurementWorkflow(store, TimeProvider.System, Options.Create(new MeasurementWorkflowOptions()));
+            var process = await workflow.StartAsync(Guid.NewGuid(), null, "exc", "quarry", "test", default);
+            var initialVersion = process.Version;
+            var writer = Task.Run(async () =>
+            {
+                for (var i = 0; i < 200; i++)
+                {
+                    var next = process with { Version = process.Version + 1 };
+                    Assert.True(await store.TrySaveAsync(next, process.Version));
+                    process = next;
+                }
+            });
+            var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
+            {
+                for (var i = 0; i < 200; i++)
+                {
+                    Assert.NotNull(await store.GetAsync(process.Id));
+                    Assert.Single(await store.GetRecentAsync(10, false));
+                    Assert.Single(await store.GetUnfinishedAsync());
+                }
+            })).ToArray();
+            await Task.WhenAll(readers.Append(writer));
+            Assert.Equal(initialVersion + 200, (await store.GetAsync(process.Id))!.Version);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]
