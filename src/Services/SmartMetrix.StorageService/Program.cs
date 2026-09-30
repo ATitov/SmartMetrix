@@ -1,3 +1,4 @@
+using SmartMetrix.Persistence;
 using Amazon.Runtime;
 using Amazon.S3;
 using Microsoft.Extensions.Options;
@@ -6,6 +7,7 @@ using SmartMetrix.StorageService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddSmartMetrixPersistence("storage");
 
 builder.Services
     .AddOptions<StorageOptions>()

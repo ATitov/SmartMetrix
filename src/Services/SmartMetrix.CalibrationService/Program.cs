@@ -1,8 +1,10 @@
+using SmartMetrix.Persistence;
 using SmartMetrix.ServiceDefaults;
 using SmartMetrix.CalibrationService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddSmartMetrixPersistence("calibration");
 builder.Services.AddOptions<CalibrationOptions>().Bind(builder.Configuration.GetSection(CalibrationOptions.SectionName))
     .Validate(options => double.IsFinite(options.MaximumReprojectionErrorPixels) && options.MaximumReprojectionErrorPixels > 0 &&
         double.IsFinite(options.BaselineToleranceMetres) && options.BaselineToleranceMetres >= 0 &&

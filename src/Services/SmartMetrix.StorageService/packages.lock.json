@@ -16,6 +16,11 @@
         "resolved": "4.0.100.9",
         "contentHash": "OPYy41jZjXwxxcYRotaq24HDrwUnVtBB/mvg1IwB9D1ICXAtHqMa1sp2hpmlVJCZwjlcrPcTCJIejInvV1vp5g=="
       },
+      "Npgsql": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA=="
+      },
       "OpenTelemetry": {
         "type": "Transitive",
         "resolved": "1.17.0",
@@ -85,6 +90,12 @@
       },
       "smartmetrix.domain": {
         "type": "Project"
+      },
+      "smartmetrix.persistence": {
+        "type": "Project",
+        "dependencies": {
+          "Npgsql": "[10.0.0, )"
+        }
       },
       "smartmetrix.servicedefaults": {
         "type": "Project",

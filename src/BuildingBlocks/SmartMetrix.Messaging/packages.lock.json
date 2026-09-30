@@ -207,6 +207,14 @@
         "resolved": "1.0.1",
         "contentHash": "xtURX0fexmMd10noG3Uc8gFgwaH7QLQxxgdaVoQKFo0+8a4blwe8vPGgY2S5pzeVYcRXyjlIoA4AR4JgtThyjQ=="
       },
+      "Npgsql": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
+        }
+      },
       "smartmetrix.contracts": {
         "type": "Project",
         "dependencies": {
@@ -215,6 +223,12 @@
       },
       "smartmetrix.domain": {
         "type": "Project"
+      },
+      "smartmetrix.persistence": {
+        "type": "Project",
+        "dependencies": {
+          "Npgsql": "[10.0.0, )"
+        }
       }
     }
   }

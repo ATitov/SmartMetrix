@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SmartMetrix · Макеты АРМ</title><link rel="stylesheet" href="style.css"><script defer src="app.js"></script></head>
+<body>
+<a class="skip" href="#main">К рабочей области</a>
+<div class="shell">
+<aside class="rail"><div class="brand"><span class="logo">SM</span><div><strong>SMARTMETRIX</strong><small>Контроль горного массива</small></div></div>
+<button id="menu" aria-expanded="false" aria-controls="navigation">Рабочие места ☰</button>
+<nav id="navigation" aria-label="Выбор макета АРМ"></nav>
+<div class="rail-note">SMX-UI-1 / Веб-интерфейс<br>Единый стандарт рабочих мест</div></aside>
+<main id="main" tabindex="-1">
+<div class="context"><span>Карьер Северный / Уступ 04 / SMX-03</span><span class="badge">Демонстрационные данные</span></div>
+<header><div><p class="eyebrow" id="role-label"></p><h1 id="title"></h1><p id="subtitle" class="muted"></p></div><button id="primary" class="primary"></button></header>
+<section class="preview-controls" aria-label="Сценарии макета"><label for="scenario">Состояние данных</label><select id="scenario"><option value="ready">Готово</option><option value="loading">Загрузка</option><option value="empty">Нет данных</option><option value="error">Ошибка сервиса</option><option value="offline">Нет связи с сервером</option><option value="partial">Частичные данные</option></select><span>Режим просмотра макетов • команды не отправляются</span></section>
+<div id="notice" role="status" aria-live="polite"></div>
+<div id="content"></div>
+<section class="panel activity"><h2>Журнал действий макета</h2><p id="activity" role="status">Действий пока нет. Изменения сохраняются только до перезагрузки страницы.</p></section>
+<footer>SmartMetrix · Прототип 1.0 · Схемы и показатели иллюстративные</footer>
+</main></div>
+<dialog id="command-dialog" aria-labelledby="dialog-title"><form id="command-form"><h2 id="dialog-title"></h2><p id="dialog-context"></p><p class="muted">Демонстрация: оборудование и рабочие данные не изменяются.</p><label for="reason">Причина / комментарий</label><textarea id="reason" required minlength="3" maxlength="500" rows="3"></textarea><p id="validation" role="alert"></p><div class="actions"><button type="button" id="cancel">Отмена</button><button type="submit" class="primary">Подтвердить в макете</button></div></form></dialog>
+<dialog id="detail-dialog" aria-labelledby="detail-title"><h2 id="detail-title">Карточка измерения M-0248</h2><dl><dt>Время экспозиции</dt><dd>30.09.2026 10:42:18 UTC+6</dd><dt>Обработка</dt><dd>Завершена</dd><dt>Проверка специалистом</dt><dd id="review-status">Ожидает проверки</dd><dt>Синхронизация</dt><dd>В локальной очереди</dd><dt>Версии</dt><dd>Результат v3 · Калибровка CAL-12 · Модель SEG-04 · СК QUARRY-01 / v2</dd><dt>Исходные данные</dt><dd>Кадры A/B/C · В макете используются схемы</dd></dl><button id="close-detail">Закрыть</button></dialog>
+</body></html>

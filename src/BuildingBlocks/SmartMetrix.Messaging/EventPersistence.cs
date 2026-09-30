@@ -61,14 +61,24 @@ public sealed class InMemoryOutboxStore : IOutboxStore
     }
 }
 
-public sealed class IdempotentEventProcessor<T>(IInboxStore inbox, Func<EventEnvelope<T>, CancellationToken, Task> handler)
+public sealed class IdempotentEventProcessor<T>(IInboxStore inbox, Func<EventEnvelope<T>, CancellationToken, Task> handler,
+    TimeProvider? clock = null)
 {
     public async Task<bool> HandleAsync(EventEnvelope<T> envelope, CancellationToken cancellationToken = default)
     {
+        bool Expired() => envelope.Data is IExpiringEvent command &&
+            (command.ExpiresAt is not { } deadline || deadline <= (clock ?? TimeProvider.System).GetUtcNow());
+        if (Expired()) return false;
         if (!await inbox.TryBeginAsync(envelope.EventId, cancellationToken)) return false;
 
         try
         {
+            // Acquiring an inbox claim may have taken longer than the command's lifetime.
+            if (Expired())
+            {
+                await inbox.CompleteAsync(envelope.EventId, cancellationToken);
+                return false;
+            }
             await handler(envelope, cancellationToken);
             await inbox.CompleteAsync(envelope.EventId, cancellationToken);
             return true;

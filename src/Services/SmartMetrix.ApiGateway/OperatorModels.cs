@@ -8,6 +8,9 @@ public static class OperatorRoles
     public const string Operator = "operator";
     public const string Engineer = "engineer";
     public const string Administrator = "administrator";
+    public const string Geologist = "geologist";
+    public const string Surveyor = "surveyor";
+    public static readonly string[] All = [Operator, Geologist, Surveyor, Engineer, Administrator];
 }
 
 public static class OperatorPolicies
@@ -47,7 +50,7 @@ public sealed record SystemStatus(string State, bool Configured, DateTimeOffset 
     IReadOnlyList<ComponentStatus> Components, string? ActiveMeasurementId);
 
 public sealed record AuditEntry(DateTimeOffset OccurredAt, string Actor, string Role, string Action,
-    Guid? MeasurementId, string? Reason, bool Succeeded)
+    Guid? MeasurementId, string? Reason, bool Succeeded, string? ScopeId = null, string? CorrelationId = null)
 {
     public static AuditEntry Create(ClaimsPrincipal principal, string action, Guid? measurementId, string? reason, bool succeeded) =>
         new(DateTimeOffset.UtcNow, principal.Identity?.Name ?? "unknown",

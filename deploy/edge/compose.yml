@@ -7,6 +7,7 @@ x-logging: &logging
     max-file: "3"
 
 x-service: &service
+  env_file: ["${SMARTMETRIX_ENV_FILE:-/etc/smartmetrix/edge.env}"]
   platform: linux/arm64
   restart: unless-stopped
   init: true
@@ -17,9 +18,11 @@ x-service: &service
   networks: [backend]
   environment: &common-environment
     ASPNETCORE_ENVIRONMENT: Production
+    Persistence__Provider: Postgres
     SmartMetrix__Messaging__Url: nats://nats:4222
   depends_on:
     nats: { condition: service_healthy }
+    postgres: { condition: service_healthy }
 
 x-build: &build
   context: ../..
@@ -84,6 +87,7 @@ services:
       Storage__AccessKey: ${MINIO_ROOT_USER:-smartmetrix}
     depends_on:
       minio: { condition: service_healthy }
+      postgres: { condition: service_healthy }
 
   measurement-orchestrator:
     <<: *service
@@ -181,6 +185,8 @@ services:
 
   trigger-service:
     <<: *service
+    depends_on:
+      nats: { condition: service_healthy }
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-trigger:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.TriggerService } }
 
@@ -213,11 +219,13 @@ services:
     <<: *service
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-cloud-sync:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.CloudSyncService } }
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/cloud-sync:/app/data"]
 
   api-gateway:
     <<: *service
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-api:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.ApiGateway } }
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/api:/app/data"]
     env_file: ["${SMARTMETRIX_ENV_FILE:-/etc/smartmetrix/edge.env}"]
     ports: ["${SMARTMETRIX_HTTP_BIND:-127.0.0.1}:8080:8080"]
     environment:

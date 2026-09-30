@@ -6,7 +6,8 @@ public sealed record CaptureRequested(
     MeasurementId MeasurementId,
     string Reason,
     DateTimeOffset RequestedAt,
-    CaptureDecisionInputs? Inputs = null);
+    CaptureDecisionInputs? Inputs = null,
+    DateTimeOffset? ExpiresAt = null) : IExpiringEvent;
 
 public sealed record CaptureDecisionInputs(
     double CanSpeedMetresPerSecond,

@@ -5,7 +5,7 @@ using SmartMetrix.TriggerService;
 
 namespace SmartMetrix.ArchitectureTests;
 
-public sealed class TriggerDecisionTests
+public sealed partial class TriggerDecisionTests
 {
     private static readonly TriggerSnapshot Safe = new(0, 0, 0.05, 0.1, 20, true, true, false, false);
 
@@ -71,18 +71,18 @@ public sealed class TriggerDecisionTests
 
     [Fact]
     [Trait("Requirement", "TRG-03")]
-    public async Task AcceptedDecisionEnqueuesCaptureRequestWithDiagnostics()
+    public async Task AcceptedDecisionPublishesCaptureRequestWithDiagnostics()
     {
         var engine = CreateEngine(out var clock);
-        var outbox = new InMemoryOutboxStore();
-        var coordinator = new TriggerCoordinator(engine, clock, outbox);
+        var publisher = new RecordingPublisher();
+        var coordinator = new TriggerCoordinator(engine, clock, publisher, Options.Create(new TriggerOptions()));
         await coordinator.EvaluateAsync(Safe, CancellationToken.None);
         clock.Advance(TimeSpan.FromSeconds(1));
 
         var result = await coordinator.EvaluateAsync(Safe, CancellationToken.None);
 
         Assert.NotNull(result.MeasurementId);
-        var message = Assert.Single(await outbox.GetPendingAsync(10, CancellationToken.None));
+        var message = Assert.Single(publisher.Messages);
         Assert.Equal(EventSubjects.For<CaptureRequested>(), message.Subject);
         var envelope = EventEnvelopeSerializer.Deserialize<CaptureRequested>(message.Payload);
         Assert.Equal("AutomaticConditionsSatisfied", envelope.Data.Reason);

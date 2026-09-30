@@ -20,6 +20,7 @@ public sealed class CloudSyncWorker(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            await using var workerLease = await queue.AcquireWorkerAsync(stoppingToken);
             var item = await queue.GetNextAsync(DateTimeOffset.UtcNow, stoppingToken);
             if (item is null)
             {

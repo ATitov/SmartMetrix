@@ -1,3 +1,4 @@
+using SmartMetrix.Persistence;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -5,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace SmartMetrix.ControlPointService;
 
-public sealed class ControlPointRegistry(TimeProvider timeProvider)
+public sealed class ControlPointRegistry(TimeProvider timeProvider, PostgresDatabase? database = null)
 {
     private const double MaximumCoordinateMetres = 10_000_000;
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
@@ -17,6 +18,7 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
 
     public ControlPointView Create(CreateControlPointRequest request, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.Create(request, actor), true);
         ValidateCommon(request.PointId, request.CoordinateSystemId, request.AccuracyMillimetres, request.MeasuredAt, request.Target);
         var coordinates = Normalize(request.Coordinates);
         lock (_gate)
@@ -31,6 +33,7 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
 
     public ControlPointView Update(string pointId, UpdateControlPointRequest request, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.Update(pointId, request, actor), true);
         ValidateCommon(pointId, request.CoordinateSystemId, request.AccuracyMillimetres, request.MeasuredAt, request.Target);
         var coordinates = Normalize(request.Coordinates);
         lock (_gate)
@@ -46,6 +49,7 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
 
     public SurveyObservation AddObservation(string pointId, AddSurveyObservationRequest request, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.AddObservation(pointId, request, actor), true);
         if (request.AccuracyMillimetres <= 0 || !double.IsFinite(request.AccuracyMillimetres)) throw new ControlPointValidationException("Accuracy must be a finite positive number of millimetres.");
         if (request.MeasuredAt == default || string.IsNullOrWhiteSpace(request.InstrumentId)) throw new ControlPointValidationException("Measurement date and instrumentId are required.");
         var coordinates = Normalize(request.Coordinates);
@@ -62,12 +66,13 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
 
     public ControlPointUsage RecordUsage(string pointId, Guid measurementId, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.RecordUsage(pointId, measurementId, actor), true);
         if (measurementId == Guid.Empty) throw new ControlPointValidationException("measurementId is required.");
         lock (_gate)
         {
             var current = Find(pointId)[^1];
             if (current.Status != ControlPointStatus.Active) throw new ControlPointConflictException("An inactive control point cannot be used in a new solution.");
-            var usage = new ControlPointUsage(pointId, measurementId, timeProvider.GetUtcNow());
+            var usage = new ControlPointUsage(pointId, measurementId, timeProvider.GetUtcNow(), current.Version);
             _usages.Add(usage);
             Audit(pointId, "used", actor, measurementId.ToString());
             return usage;
@@ -76,6 +81,7 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
 
     public void Delete(string pointId, string actor)
     {
+        if (database is not null) { InDatabase(registry => { registry.Delete(pointId, actor); return true; }, true); return; }
         lock (_gate)
         {
             Find(pointId);
@@ -85,10 +91,10 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
         }
     }
 
-    public ControlPointView Get(string pointId) { lock (_gate) { var version = Find(pointId)[^1]; return View(pointId, version); } }
-    public IReadOnlyList<ControlPointView> List(bool activeOnly = false) { lock (_gate) return _points.Select(x => View(x.Key, x.Value[^1])).Where(x => !activeOnly || x.Status == ControlPointStatus.Active).OrderBy(x => x.PointId).ToArray(); }
-    public IReadOnlyList<ControlPointVersion> History(string pointId) { lock (_gate) return Find(pointId).ToArray(); }
-    public IReadOnlyList<ControlPointAuditEntry> AuditLog(string pointId) { lock (_gate) { Find(pointId); return _audit.Where(x => x.PointId.Equals(pointId, StringComparison.OrdinalIgnoreCase)).ToArray(); } }
+    public ControlPointView Get(string pointId) { if (database is not null) return InDatabase(registry => registry.Get(pointId), false); lock (_gate) { var version = Find(pointId)[^1]; return View(pointId, version); } }
+    public IReadOnlyList<ControlPointView> List(bool activeOnly = false) { if (database is not null) return InDatabase(registry => registry.List(activeOnly), false); lock (_gate) return _points.Select(x => View(x.Key, x.Value[^1])).Where(x => !activeOnly || x.Status == ControlPointStatus.Active).OrderBy(x => x.PointId).ToArray(); }
+    public IReadOnlyList<ControlPointVersion> History(string pointId) { if (database is not null) return InDatabase(registry => registry.History(pointId), false); lock (_gate) return Find(pointId).ToArray(); }
+    public IReadOnlyList<ControlPointAuditEntry> AuditLog(string pointId) { if (database is not null) return InDatabase(registry => registry.AuditLog(pointId), false); lock (_gate) { Find(pointId); return _audit.Where(x => x.PointId.Equals(pointId, StringComparison.OrdinalIgnoreCase)).ToArray(); } }
 
     public ImportReport ImportCsv(string csv, string actor)
     {
@@ -144,6 +150,26 @@ public sealed class ControlPointRegistry(TimeProvider timeProvider)
     {
         var features = List().Select(x => new { type = "Feature", geometry = new { type = "Point", coordinates = new[] { x.XMetres, x.YMetres, x.ZMetres } }, properties = new { x.PointId, x.CoordinateSystemId, accuracyMm = x.AccuracyMillimetres, x.MeasuredAt, status = x.Status.ToString(), targetType = x.Target.Type.ToString(), targetId = x.Target.Identifier } });
         return JsonSerializer.Serialize(new { type = "FeatureCollection", features }, WebJson);
+    }
+
+    public sealed record StoredState(Dictionary<string, List<ControlPointVersion>> Points,
+        List<SurveyObservation> Observations, List<ControlPointUsage> Usages, List<ControlPointAuditEntry> Audit);
+
+    private T InDatabase<T>(Func<ControlPointRegistry, T> action, bool write)
+    {
+        using var session = database!.Open("registry", () => new StoredState(new(StringComparer.OrdinalIgnoreCase), [], [], []));
+        var registry = new ControlPointRegistry(timeProvider);
+        foreach (var point in session.Value.Points) registry._points.Add(point.Key, point.Value);
+        registry._observations.AddRange(session.Value.Observations);
+        registry._usages.AddRange(session.Value.Usages);
+        registry._audit.AddRange(session.Value.Audit);
+        var result = action(registry);
+        if (write)
+        {
+            session.Value = new(registry._points, registry._observations, registry._usages, registry._audit);
+            session.Commit();
+        }
+        return result;
     }
 
     private static (double X, double Y, double Z) Normalize(CoordinateInput value)

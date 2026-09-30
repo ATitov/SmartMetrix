@@ -17,12 +17,17 @@
 
 ### Жизненный цикл измерения
 
-`MeasurementOrchestrator` хранит состояние и журнал переходов в `data/measurements` и при старте
+`MeasurementOrchestrator` хранит состояние и журнал переходов в PostgreSQL при
+`Persistence:Provider=Postgres` или в `data/measurements` в файловом режиме и при старте
 возобновляет контроль незавершённых измерений. Команды содержат уникальный `commandId` и ожидаемую
 `expectedVersion`: повтор команды возвращает текущий результат без нового перехода, а конкурирующее
 изменение отклоняется. Длительность этапа задаётся через
 `MeasurementWorkflow__StageTimeoutSeconds`; просроченный этап детерминированно переходит в `Failed`
 с причиной в журнале и после этого может быть запущен повторно.
+
+Хранилища остальных сервисов, миграции и порядок перехода с файлов описаны в
+[data-layer.md](data-layer.md). В edge Compose включён PostgreSQL; режим локальной разработки
+по умолчанию остаётся файловым.
 
 Допустимый основной путь: `Requested` → `Capturing` → `QualityControl` → `Reconstructing` →
 `Segmenting` → `Analysing` → `Georeferencing` → `Persisting` → `Completed`. Активный процесс можно компенсировать переходом в

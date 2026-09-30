@@ -11,7 +11,8 @@ public sealed class ApiKeyAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> schemes,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    IOptions<OperatorApiOptions> options)
+    IOptions<OperatorApiOptions> options,
+    IOptions<WorkstationOptions> workstations)
     : AuthenticationHandler<AuthenticationSchemeOptions>(schemes, logger, encoder)
 {
     public const string SchemeName = "SmartMetrixApiKey";
@@ -25,11 +26,13 @@ public sealed class ApiKeyAuthenticationHandler(
         {
             if (!FixedTimeEquals(credential.Key, supplied[0]!)) continue;
             var role = credential.Value.Trim().ToLowerInvariant();
-            if (role is not (OperatorRoles.Operator or OperatorRoles.Engineer)) continue;
+            if (!OperatorRoles.All.Contains(role)) continue;
             var identity = new ClaimsIdentity([
-                new Claim(ClaimTypes.Name, $"api-key:{credential.Key[..Math.Min(8, credential.Key.Length)]}"),
+                new Claim(ClaimTypes.Name, $"api-key:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(credential.Key)))[..12]}"),
                 new Claim(ClaimTypes.Role, role)
             ], SchemeName);
+            if (workstations.Value.ApiKeyScopes.TryGetValue(credential.Key, out var scopes))
+                identity.AddClaims(scopes.Select(scope => new Claim(WorkstationIdentity.ScopeClaim, scope)));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
         }
 

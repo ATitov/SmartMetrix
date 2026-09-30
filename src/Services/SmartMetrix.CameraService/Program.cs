@@ -1,8 +1,10 @@
+using SmartMetrix.Persistence;
 using SmartMetrix.ServiceDefaults;
 using SmartMetrix.CameraService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddSmartMetrixPersistence("camera");
 builder.Services.AddCameraCapture(builder.Configuration);
 builder.Services.AddSingleton<CaptureReceiptStore>();
 

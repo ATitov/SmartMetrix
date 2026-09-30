@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace SmartMetrix.MeasurementOrchestrator;
 
-public sealed class PipelineTransport(HttpClient client, IOptions<PipelineOptions> options)
+public sealed class PipelineTransport(HttpClient client, IOptions<PipelineOptions> options, PostgresStageStore? stages = null)
 {
     public async Task<JsonElement> GetAsync(string baseUrl, string path, Guid measurementId, CancellationToken ct) =>
         await SendJsonAsync(HttpMethod.Get, baseUrl, path, null, measurementId, ct);
@@ -24,12 +24,15 @@ public sealed class PipelineTransport(HttpClient client, IOptions<PipelineOption
 
     public async Task<JsonElement?> ReadStageAsync(Guid runId, string stage, Guid measurementId, CancellationToken ct)
     {
+        if (stages is not null && await stages.ReadAsync(runId, stage, ct) is { } stored) return stored;
         using var request = Create(HttpMethod.Get, options.Value.StorageUrl,
             $"v1/measurements/{runId}/artifacts/download/pipeline/{stage}.json", measurementId);
         using var response = await client.SendAsync(request, ct);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         await CheckAsync(response, ct);
-        return await response.Content.ReadFromJsonAsync<JsonElement>(PipelineJson.Options, ct);
+        var data = await response.Content.ReadFromJsonAsync<JsonElement>(PipelineJson.Options, ct);
+        if (stages is not null) await stages.SaveAsync(measurementId, runId, stage, await StageUriAsync(runId, stage, measurementId, ct), data, ct);
+        return data;
     }
 
     public async Task<(JsonElement Data, string Uri)> SaveStageAsync(Guid runId, string stage, JsonElement data, Guid id, CancellationToken ct)
@@ -48,7 +51,9 @@ public sealed class PipelineTransport(HttpClient client, IOptions<PipelineOption
         }
         await CheckAsync(response, ct);
         var metadata = await response.Content.ReadFromJsonAsync<JsonElement>(PipelineJson.Options, ct);
-        return (data, metadata.GetProperty("uri").GetString()!);
+        var uri = metadata.GetProperty("uri").GetString()!;
+        if (stages is not null) await stages.SaveAsync(id, runId, stage, uri, data, ct);
+        return (data, uri);
     }
 
     public async Task<string> StageUriAsync(Guid runId, string stage, Guid id, CancellationToken ct)

@@ -14,6 +14,10 @@ Edge-платформа для оценки блочности и трещино
 
 ## Структура
 
+- [Веб-интерфейс и пять АРМ](docs/web-gui.md) — целевые экраны, роли, права и требования к GUI.
+- [Формальные требования GUI](docs/gui-requirements.md), [адаптивные макеты](docs/gui-prototype/index.html) и [браузерные тесты](tools/gui-tests/README.md).
+- [API пяти АРМ на ASP.NET Core](docs/workstation-api.md) — контракт v1, права, источники, настройка, миграция и ограничения.
+
 - `src/BuildingBlocks` — доменная модель и версионируемые контракты сообщений.
 - `src/Services` — независимо развёртываемые сервисы.
 - `StoneVision` — Python-сервис YOLO + MobileSAM (Git submodule); [подключение к конвейеру](docs/stonevision.md).

@@ -1,3 +1,4 @@
+using SmartMetrix.Persistence;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
@@ -9,7 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace SmartMetrix.StorageService;
 
-public sealed class ObjectStorage(IAmazonS3 s3, IOptions<StorageOptions> options)
+public sealed class ObjectStorage(IAmazonS3 s3, IOptions<StorageOptions> options, PostgresDatabase? database = null)
 {
     private const string ShaMetadata = "sha256";
     private const string MeasurementMetadata = "measurement-id";
@@ -37,6 +38,7 @@ public sealed class ObjectStorage(IAmazonS3 s3, IOptions<StorageOptions> options
 
         try
         {
+            await using var objectLease = database is null ? null : await database.OpenAsync("lock:" + key, () => true, cancellationToken);
             var (sha256, size) = await SpoolAndHashAsync(content, tempFile, cancellationToken);
             if (expectedSha256 is not null &&
                 (!IsSha256(expectedSha256) || !sha256.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase)))
@@ -98,7 +100,15 @@ public sealed class ObjectStorage(IAmazonS3 s3, IOptions<StorageOptions> options
     {
         var normalizedPath = NormalizeArtifactPath(artifactPath);
         var response = await s3.GetObjectMetadataAsync(_options.Bucket, BuildKey(measurementId, normalizedPath), cancellationToken);
-        return MapMetadata(measurementId, normalizedPath, response.Headers.ContentType, response.ContentLength, response.Metadata);
+        var metadata = MapMetadata(measurementId, normalizedPath, response.Headers.ContentType, response.ContentLength, response.Metadata);
+        if (database is not null)
+        {
+            await using var catalog = await database.OpenAsync("artifact:" + BuildKey(measurementId, normalizedPath), () => metadata, cancellationToken);
+            if (catalog.Exists && catalog.Value != metadata)
+                throw new ArtifactIntegrityException("Object metadata differs from the persisted artifact catalog.");
+            if (!catalog.Exists) await catalog.CommitAsync(cancellationToken);
+        }
+        return metadata;
     }
 
     public async Task<ArtifactDownload> DownloadVerifiedAsync(Guid measurementId, string artifactPath, CancellationToken cancellationToken)

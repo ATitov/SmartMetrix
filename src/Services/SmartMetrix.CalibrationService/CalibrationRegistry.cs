@@ -1,3 +1,4 @@
+using SmartMetrix.Persistence;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,7 +9,7 @@ namespace SmartMetrix.CalibrationService;
 public sealed class CalibrationValidationException(string message) : Exception(message);
 public sealed class CalibrationConflictException(string message) : Exception(message);
 
-public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, TimeProvider timeProvider)
+public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, TimeProvider timeProvider, PostgresDatabase? database = null)
 {
     private static readonly JsonSerializerOptions BundleJson = new(JsonSerializerDefaults.Web) { WriteIndented = false };
     private static readonly string[] CameraIds = ["A", "B", "C"];
@@ -19,6 +20,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord Create(CalibrationPayload payload, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.Create(payload, actor), true);
         ValidatePayload(payload, validateError: false);
         lock (_gate)
         {
@@ -34,6 +36,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord Activate(Guid id, DateTimeOffset validFrom, DateTimeOffset? validTo, string actor)
     {
+        if (database is not null) return InDatabase(registry => registry.Activate(id, validFrom, validTo, actor), true);
         if (validTo <= validFrom) throw new CalibrationValidationException("validTo must be later than validFrom.");
         lock (_gate)
         {
@@ -51,6 +54,7 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord Revoke(Guid id, string actor, string reason)
     {
+        if (database is not null) return InDatabase(registry => registry.Revoke(id, actor, reason), true);
         if (string.IsNullOrWhiteSpace(reason)) throw new CalibrationValidationException("A revocation reason is required.");
         lock (_gate)
         {
@@ -65,15 +69,33 @@ public sealed class CalibrationRegistry(IOptions<CalibrationOptions> options, Ti
 
     public CalibrationRecord? GetActive(string rigId, DateTimeOffset at)
     {
+        if (database is not null) return InDatabase(registry => registry.GetActive(rigId, at), false);
         lock (_gate) return _records.SingleOrDefault(x => x.Payload.RigId == rigId && x.Status == CalibrationStatus.Active && x.ValidFrom <= at && (x.ValidTo is null || at < x.ValidTo));
     }
 
-    public CalibrationRecord Get(Guid id) { lock (_gate) return Find(id); }
-    public IReadOnlyList<CalibrationRecord> List(string? rigId = null) { lock (_gate) return _records.Where(x => rigId is null || x.Payload.RigId == rigId).ToArray(); }
-    public IReadOnlyList<CalibrationAuditEntry> AuditLog(Guid id) { lock (_gate) return _audit.Where(x => x.CalibrationId == id).ToArray(); }
-    public CalibrationBundle Export(Guid id) { lock (_gate) { var x = Find(id); return new(1, x.Id, x.Version, x.Payload, x.Checksum); } }
+    public CalibrationRecord Get(Guid id) { if (database is not null) return InDatabase(registry => registry.Get(id), false); lock (_gate) return Find(id); }
+    public IReadOnlyList<CalibrationRecord> List(string? rigId = null) { if (database is not null) return InDatabase(registry => registry.List(rigId), false); lock (_gate) return _records.Where(x => rigId is null || x.Payload.RigId == rigId).ToArray(); }
+    public IReadOnlyList<CalibrationAuditEntry> AuditLog(Guid id) { if (database is not null) return InDatabase(registry => registry.AuditLog(id), false); lock (_gate) return _audit.Where(x => x.CalibrationId == id).ToArray(); }
+    public CalibrationBundle Export(Guid id) { if (database is not null) return InDatabase(registry => registry.Export(id), false); lock (_gate) { var x = Find(id); return new(1, x.Id, x.Version, x.Payload, x.Checksum); } }
 
     public static bool Verify(CalibrationBundle bundle) => string.Equals(bundle.Checksum, ComputeChecksum(bundle.SchemaVersion, bundle.CalibrationId, bundle.Version, bundle.Calibration), StringComparison.OrdinalIgnoreCase);
+
+    public sealed record StoredState(List<CalibrationRecord> Records, List<CalibrationAuditEntry> Audit);
+
+    private T InDatabase<T>(Func<CalibrationRegistry, T> action, bool write)
+    {
+        using var session = database!.Open("registry", () => new StoredState([], []));
+        var registry = new CalibrationRegistry(options, timeProvider);
+        registry._records.AddRange(session.Value.Records);
+        registry._audit.AddRange(session.Value.Audit);
+        var result = action(registry);
+        if (write)
+        {
+            session.Value = new(registry._records, registry._audit);
+            session.Commit();
+        }
+        return result;
+    }
 
     private void ValidatePayload(CalibrationPayload payload, bool validateError)
     {

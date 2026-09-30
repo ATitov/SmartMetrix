@@ -52,7 +52,12 @@ public sealed class NatsJetStreamPublisher(NatsClient client) : IEventPublisher
             message.Payload,
             opts: new NatsJSPubOpts { MsgId = message.EventId.ToString("N") },
             cancellationToken: cancellationToken);
-        ack.EnsureSuccess();
+        try { ack.EnsureSuccess(); }
+        catch (NatsJSDuplicateMessageException)
+        {
+            // A duplicate ACK confirms the original event is already persisted.
+            // This is success after a lost ACK, not a reason to keep retrying.
+        }
     }
 }
 
@@ -92,8 +97,38 @@ public sealed class OutboxDispatcher(IOutboxStore outbox, IEventPublisher publis
     }
 }
 
+internal sealed class LazyJetStreamPublisher(NatsClient client, IOptions<NatsMessagingOptions> options) : IEventPublisher
+{
+    private bool provisioned;
+    public async Task PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    {
+        if (!provisioned)
+        {
+            await client.CreateJetStreamContext().CreateOrUpdateStreamAsync(new StreamConfig(options.Value.StreamName, [EventSubjects.All])
+            {
+                Storage = StreamConfigStorage.File,
+                Retention = StreamConfigRetention.Limits,
+                MaxMsgSize = EventEnvelopeSerializer.MaximumPayloadBytes,
+                DuplicateWindow = TimeSpan.FromHours(2)
+            }, cancellationToken);
+            provisioned = true;
+        }
+        try { await new NatsJetStreamPublisher(client).PublishAsync(message, cancellationToken); }
+        catch { provisioned = false; throw; }
+    }
+}
+
 public static class MessagingExtensions
 {
+    // Direct acknowledged publishing: no database, outbox or background replay.
+    public static IServiceCollection AddSmartMetrixJetStreamPublisher(this IServiceCollection services)
+    {
+        services.AddOptions<NatsMessagingOptions>().BindConfiguration(NatsMessagingOptions.SectionName).ValidateOnStart();
+        services.AddSingleton(provider => new NatsClient(provider.GetRequiredService<IOptions<NatsMessagingOptions>>().Value.Url));
+        services.AddSingleton<IEventPublisher, LazyJetStreamPublisher>();
+        return services;
+    }
+
     public static IServiceCollection AddSmartMetrixMessaging(this IServiceCollection services, Action<NatsMessagingOptions>? configure = null)
     {
         services.AddOptions<NatsMessagingOptions>().BindConfiguration(NatsMessagingOptions.SectionName).ValidateOnStart();

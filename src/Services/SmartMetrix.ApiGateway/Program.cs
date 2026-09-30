@@ -1,3 +1,4 @@
+using SmartMetrix.Persistence;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -9,6 +10,8 @@ using SmartMetrix.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddSmartMetrixPersistence("operator");
+builder.Services.AddWorkstationApi(builder.Configuration);
 builder.Services.AddOptions<OperatorApiOptions>()
     .Bind(builder.Configuration.GetSection(OperatorApiOptions.SectionName));
 var protectionPath = builder.Configuration[$"{OperatorApiOptions.SectionName}:DataProtectionPath"] ?? "data/protection-keys";
@@ -39,6 +42,18 @@ builder.Services.AddAuthentication().AddCookie(cookieScheme, options =>
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.SlidingExpiration = true;
+    options.Events.OnValidatePrincipal = async context =>
+    {
+        var users = context.HttpContext.RequestServices.GetRequiredService<UserAccountStore>();
+        var user = await users.FindAsync(context.Principal?.Identity?.Name ?? "", context.HttpContext.RequestAborted);
+        if (user is null || !user.Enabled || user.LockedUntil > DateTimeOffset.UtcNow)
+        {
+            context.RejectPrincipal();
+            await context.HttpContext.SignOutAsync(cookieScheme);
+            return;
+        }
+        context.ReplacePrincipal(WorkstationIdentity.Principal(user, cookieScheme));
+    };
     options.Events.OnRedirectToLogin = context =>
     {
         if (context.Request.Path.StartsWithSegments("/api")) context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -69,18 +84,15 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseWorkstationSecurity();
 app.MapSmartMetrixDefaultEndpoints();
+app.MapWorkstationApi();
 
 app.MapPost("/api/auth/login", async (LoginRequest request, HttpContext context, UserAccountStore users, CancellationToken ct) =>
 {
     var user = await users.AuthenticateAsync(request.Username, request.Password, ct);
     if (user is null) return Results.Problem("Неверный логин или пароль, учетная запись отключена либо временно заблокирована.", statusCode: 401);
-    var identity = new ClaimsIdentity([
-        new Claim(ClaimTypes.Name, user.Username),
-        new Claim(ClaimTypes.GivenName, user.DisplayName),
-        new Claim(ClaimTypes.Role, user.Role)
-    ], cookieScheme);
-    await context.SignInAsync(cookieScheme, new ClaimsPrincipal(identity), new AuthenticationProperties
+    await context.SignInAsync(cookieScheme, WorkstationIdentity.Principal(user, cookieScheme), new AuthenticationProperties
     {
         IsPersistent = false,
         AllowRefresh = true,
@@ -97,7 +109,9 @@ app.MapGet("/api/auth/me", (ClaimsPrincipal user) => Results.Ok(new
 {
     Username = user.Identity?.Name,
     DisplayName = user.FindFirstValue(ClaimTypes.GivenName) ?? user.Identity?.Name,
-    Role = user.FindFirstValue(ClaimTypes.Role)
+    Role = user.FindFirstValue(ClaimTypes.Role),
+    Roles = user.FindAll(ClaimTypes.Role).Select(x => x.Value).ToArray(),
+    ScopeIds = user.FindAll(WorkstationIdentity.ScopeClaim).Select(x => x.Value).ToArray()
 })).RequireAuthorization();
 
 var administration = app.MapGroup("/api/admin").RequireAuthorization(OperatorPolicies.Administration);

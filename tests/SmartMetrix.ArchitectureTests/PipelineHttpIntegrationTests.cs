@@ -18,6 +18,7 @@ using SmartMetrix.Domain;
 namespace SmartMetrix.ArchitectureTests;
 
 // Real service executables and HTTP serialization, with a local immutable artifact server instead of MinIO.
+[Collection("ServiceProcesses")]
 public sealed class PipelineHttpIntegrationTests
 {
     private static readonly int[] ExpectedInstanceIds = [1, 2];
@@ -198,6 +199,7 @@ internal sealed class PipelineTestRig : IAsyncDisposable
     private WebApplication? _storage;
     public string Logs => string.Join('\n', _logs.TakeLast(30));
     public bool UseStoneVision { get; init; }
+    public string? PostgresConnection { get; init; }
     public bool StoneVisionInvalidResponse { get; set; }
     private static readonly string[] Services = ["CalibrationService", "CameraService", "QualityService", "DepthService", "SegmentationService", "BlockAnalysisService", "LocalPositioningService", "GeoreferenceService", "MeasurementOrchestrator"];
     private static readonly string[] Keys = ["calibration", "camera", "quality", "depth", "segmentation", "analysis", "positioning", "georeference", "orchestrator"];
@@ -310,6 +312,9 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         start.ArgumentList.Add(assembly);
         start.Environment["ASPNETCORE_URLS"] = _urls[key];
         start.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
+        start.Environment["Messaging__DispatchEnabled"] = "false";
+        start.Environment["Persistence__Provider"] = PostgresConnection is null ? "File" : "Postgres";
+        if (PostgresConnection is not null) start.Environment["ConnectionStrings__SmartMetrix"] = PostgresConnection;
         start.Environment["Logging__LogLevel__Default"] = "Warning";
         start.Environment["Camera__Adapter"] = "Simulator";
         start.Environment["Camera__CameraASerialNumber"] = "A";

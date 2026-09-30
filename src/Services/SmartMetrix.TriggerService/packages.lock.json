@@ -102,6 +102,11 @@
         "resolved": "1.0.1",
         "contentHash": "xtURX0fexmMd10noG3Uc8gFgwaH7QLQxxgdaVoQKFo0+8a4blwe8vPGgY2S5pzeVYcRXyjlIoA4AR4JgtThyjQ=="
       },
+      "Npgsql": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "xZAYhPOU2rUIFpV48xsqhCx9vXs6Y+0jX2LCoSEfDFYMw9jtAOUk3iQsCnDLrFIv9NT3JGMihn7nnuZsPKqJmA=="
+      },
       "OpenTelemetry": {
         "type": "Transitive",
         "resolved": "1.17.0",
@@ -176,7 +181,14 @@
         "type": "Project",
         "dependencies": {
           "NATS.Net": "[3.0.1, )",
-          "SmartMetrix.Contracts": "[1.0.0, )"
+          "SmartMetrix.Contracts": "[1.0.0, )",
+          "SmartMetrix.Persistence": "[1.0.0, )"
+        }
+      },
+      "smartmetrix.persistence": {
+        "type": "Project",
+        "dependencies": {
+          "Npgsql": "[10.0.0, )"
         }
       },
       "smartmetrix.servicedefaults": {

@@ -1,8 +1,10 @@
+using SmartMetrix.Persistence;
 using SmartMetrix.ServiceDefaults;
 using SmartMetrix.ControlPointService;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddSmartMetrixPersistence("control_point");
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ControlPointRegistry>();
 builder.Services.AddHttpContextAccessor();

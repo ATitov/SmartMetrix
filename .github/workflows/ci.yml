@@ -16,6 +16,30 @@ permissions:
   contents: read
 
 jobs:
+  gui-prototypes:
+    name: Responsive GUI prototypes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: tools/gui-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.19.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gui-screenshots
+          path: artifacts/gui/
+
   rtk-base-station:
     name: RTK base station
     runs-on: ubuntu-latest

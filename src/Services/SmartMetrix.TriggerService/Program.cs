@@ -9,14 +9,7 @@ var app = builder.Build();
 app.UseSmartMetrixServiceDefaults();
 app.MapSmartMetrixDefaultEndpoints();
 
-app.MapPost("/v1/trigger/evaluate", async (
-    TriggerSnapshot snapshot,
-    TriggerCoordinator coordinator,
-    CancellationToken cancellationToken) =>
-{
-    var result = await coordinator.EvaluateAsync(snapshot, cancellationToken);
-    return result.Decision.Accepted ? Results.Accepted(value: result) : Results.Ok(result);
-});
+app.MapTriggerEndpoints();
 
 app.Run();
 

@@ -1,0 +1,29 @@
+{
+  "Workstations": {
+    "TimeoutSeconds": 15,
+    "ReviewPath": "data/workstation-reviews.json",
+    "BackupDirectory": "data/backups",
+    "Scopes": [
+      {
+        "Id": "north-smx03",
+        "SiteId": "north",
+        "ExcavatorId": "SMX-03",
+        "RigId": "SMX-03",
+        "CoordinateSystemId": "QUARRY-01",
+        "Services": {
+          "orchestrator": "http://measurement-orchestrator:8080/",
+          "trigger": "http://trigger-service:8080/",
+          "camera": "http://camera-service:8080/",
+          "quality": "http://quality-service:8080/",
+          "depth": "http://depth-service:8080/",
+          "segmentation": "http://segmentation-service:8080/",
+          "storage": "http://storage-service:8080/",
+          "positioning": "http://local-positioning-service:8080/",
+          "controlPoints": "http://control-point-service:8080/",
+          "calibration": "http://calibration-service:8080/",
+          "sync": "http://cloud-sync-service:8080/"
+        }
+      }
+    ]
+  }
+}

@@ -1,8 +1,10 @@
+using SmartMetrix.Persistence;
 using SmartMetrix.LocalPositioningService;
 using SmartMetrix.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSmartMetrixServiceDefaults();
+builder.AddSmartMetrixPersistence("positioning");
 builder.Services.Configure<PositioningOptions>(builder.Configuration.GetSection(PositioningOptions.SectionName));
 builder.Services.AddSingleton<TransformRegistry>();
 builder.Services.AddSingleton<PoseResolver>();
@@ -15,6 +17,7 @@ app.MapSmartMetrixDefaultEndpoints();
 
 app.MapPost("/api/transforms", (TransformDefinition transform, TransformRegistry registry) =>
     Results.Created($"/api/transforms/{transform.ExcavatorId}/{transform.Version}", registry.Add(transform)));
+app.MapGet("/api/transforms/{excavatorId}", (string excavatorId, TransformRegistry registry) => Results.Ok(registry.List(excavatorId)));
 app.MapPost("/api/poses/resolve", (PoseRequest request, PoseResolver resolver) => Results.Ok(resolver.Resolve(request)));
 app.MapPost("/api/positioning/{excavatorId}/samples", (string excavatorId, PositioningSample[] samples,
     PositioningSampleBuffer buffer) =>

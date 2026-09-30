@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace SmartMetrix.StorageService;
 
-public sealed class StorageInitializer(IAmazonS3 s3, IOptions<StorageOptions> options) : IHostedService
+public sealed class StorageInitializer(IAmazonS3 s3, IOptions<StorageOptions> options, SmartMetrix.Persistence.PostgresDatabase? database = null) : IHostedService
 {
     private readonly StorageOptions _options = options.Value;
 
@@ -30,7 +30,7 @@ public sealed class StorageInitializer(IAmazonS3 s3, IOptions<StorageOptions> op
                     new LifecycleRule
                     {
                         Id = "artifact-retention",
-                        Status = LifecycleRuleStatus.Enabled,
+                        Status = database is null ? LifecycleRuleStatus.Enabled : LifecycleRuleStatus.Disabled,
                         Filter = new LifecycleFilter { LifecycleFilterPredicate = new LifecyclePrefixPredicate { Prefix = "measurements/" } },
                         Expiration = new LifecycleRuleExpiration { Days = _options.RetentionDays }
                     },

@@ -1,0 +1,6 @@
+{
+  "name": "smartmetrix-gui-tests",
+  "private": true,
+  "scripts": { "test": "node --test gui.test.cjs", "preview": "node preview.cjs" },
+  "devDependencies": { "playwright": "1.62.1" }
+}
