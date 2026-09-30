@@ -7,6 +7,7 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class LocalPositioningTests
 {
     [Fact]
+    [Trait("Requirement", "POS-02")]
     public void InterpolatesAtFrameHardwareTimestampAndComposesTransform()
     {
         var registry = new TransformRegistry();
@@ -37,6 +38,7 @@ public sealed class LocalPositioningTests
     }
 
     [Fact]
+    [Trait("Requirement", "POS-01")]
     public void RejectsPoseWhenTimestampIsNotBracketed()
     {
         var registry = new TransformRegistry();
@@ -50,6 +52,7 @@ public sealed class LocalPositioningTests
     }
 
     [Fact]
+    [Trait("Requirement", "POS-01")]
     public void RejectsInconsistentIndependentPositionSources()
     {
         var registry = new TransformRegistry();

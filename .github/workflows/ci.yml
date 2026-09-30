@@ -16,6 +16,17 @@ permissions:
   contents: read
 
 jobs:
+  rtk-base-station:
+    name: RTK base station
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tools/rtk-base-station/test/station.test.mjs
+
   camera-calibration:
     name: Camera calibration utility
     runs-on: ubuntu-latest
@@ -60,12 +71,16 @@ jobs:
         run: dotnet build SmartMetrix.sln --no-restore --configuration Release
 
       - name: Run tests
-        run: dotnet test SmartMetrix.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+        env:
+          SMARTMETRIX_RUN_INTEGRATION_TESTS: 'true'
+        run: dotnet test SmartMetrix.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: '**/TestResults/*.trx'
+          path: |
+            **/TestResults/*.trx
+            **/TestResults/**/coverage.cobertura.xml
           if-no-files-found: ignore

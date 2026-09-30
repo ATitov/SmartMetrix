@@ -79,6 +79,7 @@ public sealed class PipelineHttpIntegrationTests
     }
 
     [Fact]
+    [Trait("Requirement", "ORC-02")]
     public async Task ServicesCompleteMeasurementAndRejectBadFramesWithoutSyntheticResults()
     {
         await using var rig = new PipelineTestRig();
@@ -134,6 +135,7 @@ public sealed class PipelineHttpIntegrationTests
     }
 
     [Fact]
+    [Trait("Requirement", "ORC-03")]
     public async Task CancellationAndRestartPreserveCheckpointsAndRetriesAreBounded()
     {
         await using var rig = new PipelineTestRig();

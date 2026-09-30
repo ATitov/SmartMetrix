@@ -9,6 +9,7 @@ public sealed class MeasurementStateMachineTests
     private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(5);
 
     [Fact]
+    [Trait("Requirement", "ORC-01")]
     public void HappyPathCoversEveryProcessingTransition()
     {
         var process = NewProcess();
@@ -17,8 +18,10 @@ public sealed class MeasurementStateMachineTests
             MeasurementStatus.Capturing,
             MeasurementStatus.QualityControl,
             MeasurementStatus.Reconstructing,
+            MeasurementStatus.Segmenting,
             MeasurementStatus.Analysing,
             MeasurementStatus.Georeferencing,
+            MeasurementStatus.Persisting,
             MeasurementStatus.Completed
         };
 
@@ -54,8 +57,10 @@ public sealed class MeasurementStateMachineTests
     [InlineData(MeasurementStatus.Capturing)]
     [InlineData(MeasurementStatus.QualityControl)]
     [InlineData(MeasurementStatus.Reconstructing)]
+    [InlineData(MeasurementStatus.Segmenting)]
     [InlineData(MeasurementStatus.Analysing)]
     [InlineData(MeasurementStatus.Georeferencing)]
+    [InlineData(MeasurementStatus.Persisting)]
     public void ActiveMeasurementCanBeCancelledOrFailed(MeasurementStatus status)
     {
         var process = At(status);
@@ -94,8 +99,8 @@ public sealed class MeasurementStateMachineTests
     {
         var process = NewProcess();
         foreach (var next in new[] { MeasurementStatus.Capturing, MeasurementStatus.QualityControl,
-                     MeasurementStatus.Reconstructing, MeasurementStatus.Analysing,
-                     MeasurementStatus.Georeferencing, MeasurementStatus.Completed })
+                     MeasurementStatus.Reconstructing, MeasurementStatus.Segmenting, MeasurementStatus.Analysing,
+                     MeasurementStatus.Georeferencing, MeasurementStatus.Persisting, MeasurementStatus.Completed })
         {
             if (process.Status == target) break;
             process = MeasurementStateMachine.Transition(process, next, Guid.NewGuid(), null, Now, Timeout);

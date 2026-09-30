@@ -31,6 +31,11 @@ dotnet run --project src/Services/SmartMetrix.MeasurementOrchestrator
 
 ## Локальная проверка
 
+Требования и критерии приёмки всех 14 сервисов, существующие проверки и открытые
+разрывы описаны в [docs/service-requirements.md](docs/service-requirements.md).
+Прогоны по ID требования, инфраструктурные проверки и сбор покрытия описаны в
+[docs/requirements-testing.md](docs/requirements-testing.md).
+
 Тестовый захват с IP-камер Hikvision через RTSP/FFmpeg описан в
 [`docs/rtsp-camera.md`](docs/rtsp-camera.md).
 

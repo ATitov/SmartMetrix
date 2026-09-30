@@ -10,18 +10,11 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class StorageServiceIntegrationTests
 {
-    [Fact]
+    [InfrastructureFact]
     [Trait("Category", "Integration")]
+    [Trait("Requirement", "STO-01")]
     public async Task MinioUploadIsIdempotentAndCorruptionIsDetected()
     {
-        if (!string.Equals(
-                Environment.GetEnvironmentVariable("SMARTMETRIX_RUN_INTEGRATION_TESTS"),
-                "true",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
         const string accessKey = "smartmetrix";
         const string secretKey = "smartmetrix-integration-secret";
         await using var container = new ContainerBuilder("minio/minio:latest")

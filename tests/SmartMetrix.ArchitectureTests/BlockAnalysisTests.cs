@@ -6,6 +6,7 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class BlockAnalysisTests
 {
     [Fact]
+    [Trait("Requirement", "BLK-02")]
     public void CalculatesControlledVolumeWeightedPercentilesAndProvenance()
     {
         var analyzer = Analyzer(2); var request = Scene(); var id = Guid.NewGuid();
@@ -17,6 +18,7 @@ public sealed class BlockAnalysisTests
     }
 
     [Fact]
+    [Trait("Requirement", "BLK-03")]
     public void SplitsOnCrackMarksBorderBlockAndReportsConfidenceReasons()
     {
         var result = Analyzer(2).Analyze(Guid.NewGuid(), Scene(calibration: .5));
@@ -29,6 +31,7 @@ public sealed class BlockAnalysisTests
     public void InvalidShapeIsRejected() => Assert.Throws<ArgumentException>(() => Analyzer(1).Analyze(Guid.NewGuid(), Scene() with { Mask = [1] }));
 
     [Fact]
+    [Trait("Requirement", "BLK-01")]
     public void TouchingInstancesRemainSeparateAndInvalidLabelsAreRejected()
     {
         var request = Scene();

@@ -7,18 +7,10 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class NatsJetStreamIntegrationTests
 {
-    [Fact]
+    [InfrastructureFact]
     [Trait("Category", "Integration")]
     public async Task DurableConsumerReceivesEventPublishedBeforeConsumerStarts()
     {
-        if (!string.Equals(
-                Environment.GetEnvironmentVariable("SMARTMETRIX_RUN_INTEGRATION_TESTS"),
-                "true",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
         await using var container = new ContainerBuilder("nats:2.11-alpine")
             .WithCommand("--jetstream", "--store_dir=/data")
             .WithPortBinding(4222, true)

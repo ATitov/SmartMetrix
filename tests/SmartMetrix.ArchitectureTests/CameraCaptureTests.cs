@@ -6,6 +6,7 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class CameraCaptureTests
 {
     [Fact]
+    [Trait("Requirement", "CAM-04")]
     public async Task ArenaRequiresThreeUniqueConfiguredSerialNumbersBeforeLoadingNativeLibrary()
     {
         var adapter = new ArenaCameraAdapter(Options.Create(new CameraOptions

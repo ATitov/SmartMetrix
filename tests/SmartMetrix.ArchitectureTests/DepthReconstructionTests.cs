@@ -7,6 +7,7 @@ public sealed class DepthReconstructionTests
 {
     private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new(System.Text.Json.JsonSerializerDefaults.Web);
     [Fact]
+    [Trait("Requirement", "DEP-02")]
     public async Task CpuFallbackReconstructsSyntheticMultiBaselineSceneWithinDepthBudget()
     {
         const int width = 128, height = 64, shiftAb = 6, shiftBc = 6;
@@ -52,6 +53,7 @@ public sealed class DepthReconstructionTests
     }
 
     [Fact]
+    [Trait("Requirement", "DEP-03")]
     public void NativeBackendFailsExplicitlyWhenLibraryIsNotConfigured()
     {
         var frame = new GrayFrame("A", 1, 1, [0]);

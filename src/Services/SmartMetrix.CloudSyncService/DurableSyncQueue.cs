@@ -128,7 +128,9 @@ public sealed class SyncQueueStore : IDisposable
     private static async Task CopyDurablyAsync(string source, string destination, CancellationToken ct)
     {
         await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
-        await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.WriteThrough);
+        // Enqueue holds the gate and returns before copying if the item manifest exists.
+        // An unpublished spool may remain after a failed/cancelled enqueue or process restart.
+        await using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.WriteThrough);
         await input.CopyToAsync(output, ct); await output.FlushAsync(ct);
     }
 

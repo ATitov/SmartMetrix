@@ -77,6 +77,7 @@ public sealed class RectificationTests : IDisposable
     }
 
     [Fact]
+    [Trait("Requirement", "DEP-01")]
     public async Task MissingTamperedAndWrongSizeMapsFailExplicitly()
     {
         var request = Request();
@@ -124,6 +125,7 @@ public sealed class RectificationTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    [Trait("Requirement", "DEP-02")]
     public async Task BcReprojectsToAAndRespectsForeground(bool behind)
     {
         var request = Request();

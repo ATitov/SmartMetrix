@@ -6,6 +6,7 @@ namespace SmartMetrix.ArchitectureTests;
 public sealed class QualityAnalyzerTests
 {
     [Fact]
+    [Trait("Requirement", "QUA-01")]
     public async Task MissingFrameIsAlwaysRejected()
     {
         var analyzer = CreateAnalyzer();
@@ -16,6 +17,7 @@ public sealed class QualityAnalyzerTests
     }
 
     [Fact]
+    [Trait("Requirement", "QUA-02")]
     public async Task ReferenceFramesProduceReproducibleNormalizedMetrics()
     {
         var analyzer = CreateAnalyzer();
@@ -28,6 +30,7 @@ public sealed class QualityAnalyzerTests
     }
 
     [Fact]
+    [Trait("Requirement", "QUA-01")]
     public async Task TimestampMismatchHasMachineReadableReason()
     {
         var analyzer = CreateAnalyzer(maxSkew: 1);
@@ -36,6 +39,7 @@ public sealed class QualityAnalyzerTests
     }
 
     [Fact]
+    [Trait("Requirement", "QUA-01")]
     public async Task DuplicateCameraIsReportedAsInconsistentSet()
     {
         var analyzer = CreateAnalyzer();

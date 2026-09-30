@@ -24,6 +24,7 @@ public sealed class RtspCameraTests
     }
 
     [Fact]
+    [Trait("Requirement", "CAM-03")]
     public async Task ThreeStreamsOpenConcurrentlyAndStoredResultDoesNotClaimSynchronization()
     {
         var opened = 0;

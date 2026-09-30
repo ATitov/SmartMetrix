@@ -49,6 +49,7 @@ public sealed class StoneVisionTests
     [InlineData("[0,-1,7]")]
     [InlineData("[0,1]")]
     [InlineData("\"compressed-rle\"")]
+    [Trait("Requirement", "SEG-01")]
     public async Task RejectsInvalidRleWithoutWritingArtifacts(string counts)
     {
         var response = Response([0, 1, 2, 2, 1]).Replace("[0,1,2,2,1]", counts, StringComparison.Ordinal);
@@ -110,6 +111,7 @@ public sealed class StoneVisionTests
     }
 
     [Fact]
+    [Trait("Requirement", "SEG-02")]
     public async Task OverlapUsesHighestConfidenceThenLowerIdAndRetainsBothOriginalMasks()
     {
         var root = System.Text.Json.Nodes.JsonNode.Parse(Response([0, 6]))!;
@@ -134,6 +136,7 @@ public sealed class StoneVisionTests
     }
 
     [Fact]
+    [Trait("Requirement", "SEG-03")]
     public async Task HttpFailureDoesNotFallBackToSimulator()
     {
         var store = new Store();
@@ -148,6 +151,7 @@ public sealed class StoneVisionTests
     [InlineData("[]")]
     [InlineData("{\"models_loaded\":\"true\"}")]
     [InlineData("not-json")]
+    [Trait("Requirement", "SEG-03")]
     public async Task ReadinessRequiresLoadedModels(string response)
     {
         using var http = new HttpClient(new Handler(response)) { BaseAddress = new("http://stonevision/") };

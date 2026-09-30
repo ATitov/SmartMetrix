@@ -9,6 +9,7 @@ public sealed class CalibrationRegistryTests
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
+    [Trait("Requirement", "CAL-01")]
     public void RejectsActivationWhenReprojectionErrorIsTooHigh()
     {
         var registry = Registry();
@@ -17,6 +18,7 @@ public sealed class CalibrationRegistryTests
     }
 
     [Fact]
+    [Trait("Requirement", "CAL-02")]
     public void AllowsOnlyOneActiveCalibrationPerRigAndPeriod()
     {
         var registry = Registry();
@@ -29,6 +31,7 @@ public sealed class CalibrationRegistryTests
     }
 
     [Fact]
+    [Trait("Requirement", "CAL-03")]
     public void BundleHasVersionAndVerifiableChecksumAndCanBeLoaded()
     {
         var registry = Registry();
@@ -77,6 +80,27 @@ public sealed class CalibrationRegistryTests
     public void RejectsInvalidReprojectionErrors(double error)
     {
         Assert.Throws<CalibrationValidationException>(() => Registry().Create(Payload(error), "test"));
+    }
+
+    [Fact]
+    [Trait("Requirement", "CAL-02")]
+    public void RevokedCalibrationCannotBeReactivated()
+    {
+        var registry = Registry();
+        var record = registry.Create(Payload(), "test");
+        registry.Revoke(record.Id, "test", "camera moved");
+        Assert.Throws<CalibrationConflictException>(() => registry.Activate(record.Id, DateTimeOffset.UtcNow, null, "test"));
+        Assert.Null(registry.GetActive("rig-1", DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    [Trait("Requirement", "CAL-03")]
+    public void ChangedBundleVersionFailsChecksumVerification()
+    {
+        var registry = Registry();
+        var record = registry.Create(Payload(), "test");
+        var bundle = registry.Export(record.Id);
+        Assert.False(CalibrationRegistry.Verify(bundle with { Version = bundle.Version + 1 }));
     }
 
     private static CalibrationPayload Payload(double error = .3) => new(
