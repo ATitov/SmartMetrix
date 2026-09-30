@@ -28,6 +28,21 @@ public sealed class BlockAnalysisTests
     [Fact]
     public void InvalidShapeIsRejected() => Assert.Throws<ArgumentException>(() => Analyzer(1).Analyze(Guid.NewGuid(), Scene() with { Mask = [1] }));
 
+    [Fact]
+    public void TouchingInstancesRemainSeparateAndInvalidLabelsAreRejected()
+    {
+        var request = Scene();
+        var points = Enumerable.Range(0, 21).Select(i => new OrganizedPoint(i % 7 * .01, i / 7 * .01, 1, 1)).ToArray();
+        request = request with { Points = points, Mask = Enumerable.Repeat((byte)1, 21).ToArray() };
+        Assert.Single(Analyzer(1).Analyze(Guid.NewGuid(), request).Blocks);
+        var labelled = request with { InstanceLabels = Enumerable.Range(0, 21).Select(i => i % 7 < 3 ? 10 : 20).ToArray() };
+        var result = Analyzer(1).Analyze(Guid.NewGuid(), labelled);
+        Assert.Equal(2, result.Blocks.Count);
+        Assert.Equal(new int?[] { 10, 20 }, result.Blocks.Select(block => block.SourceInstanceId));
+        Assert.Throws<ArgumentException>(() => Analyzer(1).Analyze(Guid.NewGuid(), labelled with { InstanceLabels = [1] }));
+        Assert.Throws<ArgumentException>(() => Analyzer(1).Analyze(Guid.NewGuid(), labelled with { InstanceLabels = new int[21] }));
+    }
+
     private static BlockAnalyzer Analyzer(int minimum) => new(Options.Create(new BlockAnalysisOptions { MinimumPointsPerBlock = minimum, MaximumNeighbourDistanceMetres = .3, OutlierDistanceFactor = 10, PartialVisibilityBorderPixels = 1, AlgorithmVersion = "test-v1" }));
     private static BlockAnalysisRequest Scene(double calibration = 1)
     {

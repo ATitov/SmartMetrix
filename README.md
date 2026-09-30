@@ -16,6 +16,7 @@ Edge-платформа для оценки блочности и трещино
 
 - `src/BuildingBlocks` — доменная модель и версионируемые контракты сообщений.
 - `src/Services` — независимо развёртываемые сервисы.
+- `StoneVision` — Python-сервис YOLO + MobileSAM (Git submodule); [подключение к конвейеру](docs/stonevision.md).
 - `docs/architecture.md` — поток измерения и ответственность сервисов.
 - `docker-compose.yml` — локальная инфраструктура разработки.
 

@@ -1,0 +1,32 @@
+# NVIDIA/CUDA workstation profile; paths are relative to docker-compose.yml.
+services:
+  stonevision:
+    build:
+      context: ./StoneVision
+    gpus: all
+    volumes:
+      - ./StoneVision/weights:/app/weights:ro
+    ports: ["127.0.0.1:5000:5000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json, urllib.request; assert json.load(urllib.request.urlopen('http://localhost:5000/health', timeout=5))['models_loaded']"]
+      interval: 10s
+      timeout: 10s
+      start_period: 120s
+      retries: 6
+
+  segmentation-service:
+    build:
+      context: .
+      dockerfile: deploy/edge/Dockerfile
+      args:
+        SERVICE: SmartMetrix.SegmentationService
+    environment:
+      Segmentation__Backend: StoneVision
+      Segmentation__StoneVisionBaseUrl: http://stonevision:5000
+      Segmentation__StoneVisionTimeoutSeconds: 180
+      Segmentation__ModelVersion: ${STONEVISION_MODEL_VERSION:?set STONEVISION_MODEL_VERSION to the deployed weights version}
+      Segmentation__StorageBaseUrl: http://storage-service:8080
+    ports: ["127.0.0.1:5205:8080"]
+    depends_on:
+      stonevision: { condition: service_healthy }
+      storage-service: { condition: service_started }

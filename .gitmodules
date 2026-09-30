@@ -1,0 +1,3 @@
+[submodule "StoneVision"]
+	path = StoneVision
+	url = https://github.com/StoneRecognition/StoneVision.git

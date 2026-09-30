@@ -43,6 +43,8 @@
 
 - `CameraService` → `libsmartmetrix_arena` → Arena SDK.
 - `DepthService` → `libsmartmetrix_stereo` → OpenCV CUDA/VPI.
-- `SegmentationService` → TensorRT/ONNX Runtime.
+- `SegmentationService` → StoneVision по HTTP для YOLO + MobileSAM;
+  [настройка и ограничения](stonevision.md). Backend `Deterministic` служит для тестов;
+  native TensorRT/ONNX Runtime остаётся отдельной будущей интеграцией.
 
 До появления аппаратных SDK реализации должны явно возвращать `NotConfigured`, а не генерировать правдоподобные фиктивные измерения.

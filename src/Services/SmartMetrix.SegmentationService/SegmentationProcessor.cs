@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -27,12 +28,20 @@ public sealed class HttpSegmentationArtifactStore(HttpClient client, IOptions<Se
     }
 }
 
-public sealed class SegmentationProcessor(ISegmentationBackend backend, ISegmentationArtifactStore artifacts, IOptions<SegmentationOptions> configured)
+public interface ISegmentationProcessor
+{
+    Task<SegmentationResult> ProcessAsync(Guid measurementId, SegmentationRequest request, CancellationToken cancellationToken);
+}
+
+public sealed class SegmentationProcessor(ISegmentationBackend backend, ISegmentationArtifactStore artifacts, IOptions<SegmentationOptions> configured) : ISegmentationProcessor
 {
     private readonly SegmentationOptions _options = configured.Value;
 
     public async Task<SegmentationResult> ProcessAsync(Guid measurementId, SegmentationRequest request, CancellationToken cancellationToken)
     {
+        var started = Stopwatch.GetTimestamp();
+        SegmentationValidation.Validate(request);
+        if (request.Detection is not null) throw new ArgumentException("Detection parameters require the StoneVision backend.");
         Validate(request.Frame);
         await backend.LoadAndWarmupAsync(cancellationToken);
         var frame = request.Frame; var pixels = frame.Width * frame.Height;
@@ -62,7 +71,13 @@ public sealed class SegmentationProcessor(ISegmentationBackend backend, ISegment
         var maskUri = await artifacts.PutAsync(measurementId, "segmentation/mask.pgm", "image/x-portable-graymap", ToPgm(frame.Width, frame.Height, mask, 2), cancellationToken);
         var confidenceUri = await artifacts.PutAsync(measurementId, "segmentation/confidence.pgm", "image/x-portable-graymap", ToPgm(frame.Width, frame.Height, confidence, 255), cancellationToken);
         return new(new SegmentationCreated(new MeasurementId(measurementId), maskUri, backend.Descriptor.Version, average), confidenceUri,
-            average < _options.MinimumConfidence, Enum.GetValues<MaskClass>().ToDictionary(x => x.ToString(), x => counts[(int)x]));
+            average < _options.MinimumConfidence, Enum.GetValues<MaskClass>().ToDictionary(x => x.ToString(), x => counts[(int)x]))
+        {
+            Image = new(frame.Width, frame.Height, frame.PixelFormat, frame.CameraId, frame.PixelGrid),
+            Provenance = new("Deterministic", backend.Descriptor.Version, null, null),
+            ProcessingMilliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+            Warnings = [new("TestBackend", "Deterministic segmentation is test data and does not produce stone instances.")]
+        };
     }
 
     private void Validate(SegmentationFrame frame)

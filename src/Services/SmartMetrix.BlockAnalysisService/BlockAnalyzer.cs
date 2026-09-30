@@ -31,7 +31,8 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
             {
                 ["minimumPointsPerBlock"] = _options.MinimumPointsPerBlock,
                 ["maximumNeighbourDistanceMetres"] = _options.MaximumNeighbourDistanceMetres,
-                ["outlierDistanceFactor"] = _options.OutlierDistanceFactor
+                ["outlierDistanceFactor"] = _options.OutlierDistanceFactor,
+                ["usesInstanceLabels"] = request.InstanceLabels is null ? 0 : 1
             });
         return new(measurementId, "millimetre", "square-millimetre", "cubic-millimetre", blocks,
             SizeClasses(valid), percentiles[0], percentiles[1], percentiles[2], percentiles[3],
@@ -51,6 +52,7 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
                 if (nx < 0 || ny < 0 || nx >= request.Width || ny >= request.Height) continue;
                 var next = ny * request.Width + nx;
                 if (visited[next] || request.Mask[next] != (byte)AnalysisMaskClass.Rock || !request.Points[next].IsValid) continue;
+                if (request.InstanceLabels is { } labels && labels[index] != labels[next]) continue;
                 if (Distance(request.Points[index], request.Points[next]) > _options.MaximumNeighbourDistanceMetres) continue;
                 visited[next] = true; queue.Enqueue(next);
             }
@@ -80,7 +82,8 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
         var geometry = Geometry(points);
         var c = Centre(points.Length == 0 ? original : points);
         return new(Guid.NewGuid(), measurementId, request.CoordinateSystemId, new(c.XMetres, c.YMetres, c.ZMetres), geometry,
-            points.Length >= _options.MinimumPointsPerBlock, partial, confidence, reasons.Order().ToArray(), request.Artifacts);
+            points.Length >= _options.MinimumPointsPerBlock, partial, confidence, reasons.Order().ToArray(), request.Artifacts,
+            request.InstanceLabels?[pixels[0]]);
     }
 
     private static BlockGeometry Geometry(OrganizedPoint[] points)
@@ -110,5 +113,12 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
         if (request.Width <= 0 || request.Height <= 0 || (long)request.Width * request.Height != request.Points.Count || request.Points.Count != request.Mask.Count || request.Mask.Count != request.SegmentationConfidence.Count) throw new ArgumentException("Point cloud, mask and confidence map must be non-empty organized arrays of equal dimensions.");
         if (string.IsNullOrWhiteSpace(request.CoordinateSystemId)) throw new ArgumentException("Coordinate system is required.");
         if (request.Mask.Any(x => x > (byte)AnalysisMaskClass.Crack)) throw new ArgumentException("Mask contains an unsupported class.");
+        if (request.InstanceLabels is { } labels)
+        {
+            if (labels.Count != request.Mask.Count) throw new ArgumentException("Instance labels must match the organized image dimensions.");
+            for (var i = 0; i < labels.Count; i++)
+                if (labels[i] < 0 || (labels[i] > 0) != (request.Mask[i] == (byte)AnalysisMaskClass.Rock))
+                    throw new ArgumentException("Instance labels must be positive on rock pixels and zero elsewhere.");
+        }
     }
 }

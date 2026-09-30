@@ -94,7 +94,19 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 var rgb = new byte[pixels.Length * 3];
                 for (var i = 0; i < pixels.Length; i++) rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = pixels[i];
                 return await transport.PostAsync(_options.SegmentationUrl, path + "segmentation",
-                    new { frame = new { width, height, channels = 3, pixelFormat = "RGB8", pixels = rgb } }, id, ct);
+                    new
+                    {
+                        frame = new
+                        {
+                            width,
+                            height,
+                            channels = 3,
+                            pixelFormat = "RGB8",
+                            pixels = rgb,
+                            cameraId = "A",
+                            pixelGrid = "CameraAOriginal"
+                        }
+                    }, id, ct);
             }
             // Mapped BC is reprojected geometrically to A by DepthService; legacy stays AB/AC.
             var geometry = payload.GetProperty("geometry");
@@ -139,6 +151,17 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 throw new PipelineException("ArtifactSizeMismatch", "Depth image dimensions do not match calibration.");
             var mask = ReadPgm(await transport.DownloadAsync(run, Text(segmentation.GetProperty("event"), "maskUri"), id, ct), width, height, 2);
             var confidence = ReadPgm(await transport.DownloadAsync(run, Text(segmentation, "confidenceMapUri"), id, ct), width, height, 255);
+            int[]? instanceLabels = null;
+            if (segmentation.TryGetProperty("instanceMapUri", out var instanceUri) && instanceUri.ValueKind == JsonValueKind.String)
+            {
+                var map = JsonSerializer.Deserialize<JsonElement>(await transport.DownloadAsync(run, instanceUri.GetString()!, id, ct));
+                if (map.GetProperty("schemaVersion").GetInt32() != 1 || map.GetProperty("width").GetInt32() != width ||
+                    map.GetProperty("height").GetInt32() != height || Text(map, "cameraId") != "A" || Text(map, "pixelGrid") != "CameraAOriginal")
+                    throw new PipelineException("PixelGridMismatch", "Instance map must use the original camera A grid and calibration dimensions.");
+                instanceLabels = map.GetProperty("labels").EnumerateArray().Select(x => x.GetInt32()).ToArray();
+                if (instanceLabels.Length != mask.Length || instanceLabels.Where((value, index) => value < 0 || (value > 0) != (mask[index] == 1)).Any())
+                    throw new PipelineException("InvalidInstanceMap", "Instance labels do not match the rock mask.");
+            }
             return await transport.PostAsync(_options.AnalysisUrl, path + "block-analysis", new
             {
                 width,
@@ -146,6 +169,7 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 points = organized.GetProperty("points"),
                 mask = mask.Select(x => (int)x).ToArray(),
                 segmentationConfidence = confidence.Select(x => x / 255f).ToArray(),
+                instanceLabels,
                 settings.CalibrationConfidence,
                 coordinateSystemId = settings.CameraRigCoordinateSystemId,
                 artifacts = new
@@ -154,6 +178,7 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                     maskUri = Text(segmentation.GetProperty("event"), "maskUri"),
                     depthConfidenceUri = Text(depth.GetProperty("event"), "confidenceMapUri"),
                     segmentationConfidenceUri = Text(segmentation, "confidenceMapUri"),
+                    instanceMapUri = instanceLabels is null ? null : instanceUri.GetString(),
                     calibrationId
                 }
             }, id, ct);

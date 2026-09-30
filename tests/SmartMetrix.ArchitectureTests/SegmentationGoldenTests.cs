@@ -18,6 +18,11 @@ public sealed class SegmentationGoldenTests
         Assert.Equal(store.Payloads[0], store.Payloads[2]);
         Assert.Equal(new byte[] { 0, 0, 1, 1, 0, 0, 1, 1, 2, 2, 1, 1, 2, 2, 1, 1 }, PgmPixels(store.Payloads[0]));
         Assert.Equal(first.Event.Confidence, second.Event.Confidence, 12);
+        Assert.Equal(2, first.SchemaVersion);
+        Assert.Equal("Deterministic", first.Provenance!.Backend);
+        Assert.Null(first.InstanceMapUri);
+        Assert.Empty(first.Instances);
+        await Assert.ThrowsAsync<ArgumentException>(() => processor.ProcessAsync(Guid.NewGuid(), new(frame, new DetectionParameters()), default));
     }
 
     [Fact]
