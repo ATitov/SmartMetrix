@@ -11,6 +11,14 @@
 #include "ArenaApi.h"
 #endif
 
+extern "C" int32_t smartmetrix_arena_probe() {
+#ifdef SMARTMETRIX_WITH_ARENA
+    return SMARTMETRIX_ARENA_ABI_VERSION;
+#else
+    return 0;
+#endif
+}
+
 namespace {
 struct owned_frame {
     std::string camera_id;

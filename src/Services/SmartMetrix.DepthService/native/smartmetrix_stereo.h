@@ -42,6 +42,7 @@ SMARTMETRIX_STEREO_API smartmetrix_stereo_status smartmetrix_stereo_compute(
     const uint8_t* left, const uint8_t* right, int32_t width, int32_t height,
     smartmetrix_stereo_output* output);
 SMARTMETRIX_STEREO_API void smartmetrix_stereo_release(smartmetrix_stereo_output* output);
+SMARTMETRIX_STEREO_API int32_t smartmetrix_stereo_probe(void);
 
 #ifdef __cplusplus
 }
