@@ -5,25 +5,21 @@ using NATS.Net;
 
 namespace SmartMetrix.ArchitectureTests;
 
+[Collection("NatsInfrastructure")]
 public sealed class NatsJetStreamIntegrationTests
 {
-    [InfrastructureFact]
+    [NatsFact]
     [Trait("Category", "Integration")]
     public async Task DurableConsumerReceivesEventPublishedBeforeConsumerStarts()
     {
-        await using var container = new ContainerBuilder("nats:2.11-alpine")
-            .WithCommand("--jetstream", "--store_dir=/data")
-            .WithPortBinding(4222, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(4222))
-            .Build();
-        await container.StartAsync(CancellationToken.None);
-
-        var url = $"nats://{container.Hostname}:{container.GetMappedPublicPort(4222)}";
+        await using var fixture = await NatsTestServer.CreateAsync();
+        var url = fixture.Url;
         await using var publisher = new NatsClient(url);
         var publisherContext = publisher.CreateJetStreamContext();
         await publisherContext.CreateStreamAsync(
-            new StreamConfig("INTEGRATION_EVENTS", ["integration.>"]),
+            new StreamConfig(fixture.StreamName, ["integration.>"]),
             CancellationToken.None);
+        fixture.StreamCreated = true;
         (await publisherContext.PublishAsync(
             "integration.event",
             "persisted",
@@ -32,7 +28,7 @@ public sealed class NatsJetStreamIntegrationTests
         await using var consumerClient = new NatsClient(url);
         var consumerContext = consumerClient.CreateJetStreamContext();
         var consumer = await consumerContext.CreateOrUpdateConsumerAsync(
-            "INTEGRATION_EVENTS",
+            fixture.StreamName,
             new ConsumerConfig("integration-consumer"),
             CancellationToken.None);
         var message = await consumer.NextAsync<string>(cancellationToken: CancellationToken.None);

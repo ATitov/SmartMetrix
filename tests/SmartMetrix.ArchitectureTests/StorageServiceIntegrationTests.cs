@@ -10,37 +10,29 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class StorageServiceIntegrationTests
 {
-    [InfrastructureFact]
+    [MinioFact]
     [Trait("Category", "Integration")]
     [Trait("Requirement", "STO-01")]
     public async Task MinioUploadIsIdempotentAndCorruptionIsDetected()
     {
-        const string accessKey = "smartmetrix";
-        const string secretKey = "smartmetrix-integration-secret";
-        await using var container = new ContainerBuilder("minio/minio:latest")
-            .WithEnvironment("MINIO_ROOT_USER", accessKey)
-            .WithEnvironment("MINIO_ROOT_PASSWORD", secretKey)
-            .WithCommand("server", "/data")
-            .WithPortBinding(9000, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(9000))
-            .Build();
-        await container.StartAsync(CancellationToken.None);
+        await using var fixture = await MinioTestServer.CreateAsync();
 
         var storageOptions = new StorageOptions
         {
-            Endpoint = $"http://{container.Hostname}:{container.GetMappedPublicPort(9000)}",
-            AccessKey = accessKey,
-            SecretKey = secretKey,
-            Bucket = "smartmetrix-integration",
+            Endpoint = fixture.Endpoint,
+            AccessKey = fixture.AccessKey,
+            SecretKey = fixture.SecretKey,
+            Bucket = fixture.Bucket,
             RetentionDays = 1,
             IncompleteUploadRetentionDays = 1
         };
         using var s3 = new AmazonS3Client(
-            new BasicAWSCredentials(accessKey, secretKey),
+            new BasicAWSCredentials(fixture.AccessKey, fixture.SecretKey),
             new AmazonS3Config { ServiceURL = storageOptions.Endpoint, ForcePathStyle = true });
         var configuredOptions = Options.Create(storageOptions);
         var initializer = new StorageInitializer(s3, configuredOptions);
         await initializer.StartAsync(CancellationToken.None);
+        fixture.BucketCreated = true;
         var storage = new ObjectStorage(s3, configuredOptions);
         var measurementId = Guid.NewGuid();
         var payload = Encoding.UTF8.GetBytes("frame-data");
@@ -65,7 +57,7 @@ public sealed class StorageServiceIntegrationTests
         Assert.True(first.Created);
         Assert.False(repeated.Created);
         Assert.Equal(first.Metadata, repeated.Metadata);
-        Assert.StartsWith("s3://smartmetrix-integration/measurements/", first.Metadata.Uri, StringComparison.Ordinal);
+        Assert.StartsWith($"s3://{fixture.Bucket}/measurements/", first.Metadata.Uri, StringComparison.Ordinal);
 
         await using (var download = await storage.DownloadVerifiedAsync(measurementId, "frames/camera-a.raw", CancellationToken.None))
         using (var reader = new StreamReader(download.Content))

@@ -50,7 +50,7 @@ public sealed partial class PostgresPersistenceTests
         var started = await rig.PostAsync<MeasurementProcess>("orchestrator", "measurements", request);
         var completed = await rig.WaitForTerminalAsync(started.Id);
         Assert.True(completed.Status == MeasurementStatus.Completed, completed.FailureReason + rig.Logs);
-        Assert.True(completed.D50 > 0);
+        Assert.Null(completed.D50); // The synthetic scene is planar; no volume distribution is available.
         using var db = await fixture.OpenAsync("measurement");
         await using var count = db.Source.CreateCommand("SELECT count(*) FROM measurement.stages");
         Assert.Equal(9L, await count.ExecuteScalarAsync());
@@ -59,7 +59,8 @@ public sealed partial class PostgresPersistenceTests
         Assert.Equal(completed.Version, restored.Version);
         Assert.Equal(completed.D50, restored.D50);
         var result = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{started.Id}/stages/result");
-        Assert.Equal(completed.D50, result.GetProperty("analysis").GetProperty("d50Millimetres").GetDouble());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("analysis").GetProperty("d50Millimetres").ValueKind);
+        Assert.False(result.GetProperty("analysis").GetProperty("volumeDistributionAvailable").GetBoolean());
     }
 
     [PostgresFact]
