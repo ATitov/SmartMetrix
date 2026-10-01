@@ -64,7 +64,7 @@ internal sealed class MinioTestServer(string endpoint, string accessKey, string 
             if (string.IsNullOrWhiteSpace(access) || string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("External MinIO requires test credentials.");
             return new(endpoint, access, secret, null);
         }
-        var container = new ContainerBuilder("minio/minio:RELEASE.2025-07-23T15-54-02Z")
+        var container = new ContainerBuilder(Environment.GetEnvironmentVariable("SMARTMETRIX_TEST_MINIO_IMAGE") ?? "smartmetrix-minio-test:2025-07-23")
             .WithEnvironment("MINIO_ROOT_USER", "smartmetrix").WithEnvironment("MINIO_ROOT_PASSWORD", "smartmetrix-integration-secret")
             .WithCommand("server", "/data").WithPortBinding(9000, true)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(9000)).Build();

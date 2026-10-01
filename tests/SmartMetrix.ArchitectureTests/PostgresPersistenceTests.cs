@@ -371,7 +371,8 @@ public sealed partial class PostgresPersistenceTests
                 container = new ContainerBuilder("postgis/postgis:17-3.5-alpine")
                     .WithEnvironment("POSTGRES_PASSWORD", "integration-only-password")
                     .WithPortBinding(5432, true)
-                    .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("pg_isready", "-U", "postgres"))
+                    // The initdb server accepts Unix-socket connections before the final TCP server starts.
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(5432))
                     .Build();
                 await container.StartAsync();
                 admin = $"Host={container.Hostname};Port={container.GetMappedPublicPort(5432)};Username=postgres;Password=integration-only-password;Database=postgres";

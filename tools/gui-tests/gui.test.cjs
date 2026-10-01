@@ -65,7 +65,7 @@ for(const [role,title] of Object.entries(names)) {
         assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Page overflows horizontally');
         const badTargets=await page.locator('button,select,input').evaluateAll(nodes=>nodes.filter(n=>n.getClientRects().length && (n.getBoundingClientRect().height<44 || n.getBoundingClientRect().width<44)).map(n=>n.outerHTML));
         assert.deepEqual(badTargets,[]);
-        if(width<768){await page.locator('#menu').click();assert.equal(await page.locator('#menu').getAttribute('aria-expanded'),'true');assert.ok(await page.locator('nav').isVisible());await page.locator(`nav a[href="#${role==='operator'?'engineer':'operator'}"]`).click();assert.equal(await page.locator('#menu').getAttribute('aria-expanded'),'false');await page.goto(`${base}/#${role}`);}
+        if(width<768){await page.locator('#menu').click();assert.equal(await page.locator('#menu').getAttribute('aria-expanded'),'true');assert.ok(await page.locator('nav').isVisible());await page.locator(`nav a[href="#${role==='operator'?'engineer':'operator'}"]`).click();await page.waitForFunction(()=>document.querySelector('#menu').getAttribute('aria-expanded')==='false');assert.equal(await page.locator('#menu').getAttribute('aria-expanded'),'false');await page.goto(`${base}/#${role}`);}
         await page.screenshot({path:path.join(output,`${role}-${width}.png`),fullPage:true});
         assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
       } finally {await page.close();}
