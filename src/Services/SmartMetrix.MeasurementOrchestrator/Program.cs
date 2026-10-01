@@ -27,6 +27,15 @@ builder.Services.AddHttpClient<PipelineTransport>((services, client) =>
     client.Timeout = TimeSpan.FromSeconds(services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PipelineOptions>>().Value.RequestTimeoutSeconds));
 builder.Services.AddSingleton<ProcessingPipeline>();
 builder.Services.AddHostedService<MeasurementPipelineWorker>();
+builder.Services.AddOptions<CaptureTriggerOptions>().Bind(builder.Configuration.GetSection(CaptureTriggerOptions.SectionName))
+    .Validate(x => x.IsValid(), "Enabled capture trigger requires rig, excavator, coordinate system and durable consumer name.")
+    .ValidateOnStart();
+if (builder.Configuration.GetValue<bool>("CaptureTrigger:Enabled"))
+{
+    if (!usePostgres) builder.Services.AddSmartMetrixJetStreamPublisher();
+    builder.Services.AddSingleton<CaptureTriggerHandler>();
+    builder.Services.AddHostedService<CaptureTriggerConsumer>();
+}
 builder.Services.AddExceptionHandler<WorkflowExceptionHandler>();
 builder.Services.AddHealthChecks().AddCheck<PipelineHealthCheck>("pipeline-configuration", tags: ["ready"]);
 

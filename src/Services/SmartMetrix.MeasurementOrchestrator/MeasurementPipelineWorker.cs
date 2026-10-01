@@ -159,10 +159,10 @@ public sealed class MeasurementPipelineWorker(IMeasurementStore store, Measureme
         var blocks = analysis.GetProperty("blocks").EnumerateArray().Count(x => x.GetProperty("isValid").GetBoolean());
         return process with
         {
-            D10 = analysis.GetProperty("d10Millimetres").GetDouble(),
-            D50 = analysis.GetProperty("d50Millimetres").GetDouble(),
-            D80 = analysis.GetProperty("d80Millimetres").GetDouble(),
-            D95 = analysis.GetProperty("d95Millimetres").GetDouble(),
+            D10 = Number(analysis, "d10Millimetres"),
+            D50 = Number(analysis, "d50Millimetres"),
+            D80 = Number(analysis, "d80Millimetres"),
+            D95 = Number(analysis, "d95Millimetres"),
             Confidence = analysis.GetProperty("confidence").GetDouble(),
             BlockCount = blocks,
             OversizeFraction = blocks == 0 ? null : analysis.GetProperty("oversizeCount").GetInt32() / (double)blocks,
@@ -170,4 +170,6 @@ public sealed class MeasurementPipelineWorker(IMeasurementStore store, Measureme
             IsTestData = manifest.GetProperty("isTestData").GetBoolean()
         };
     }
+
+    private static double? Number(JsonElement value, string name) => value.GetProperty(name).ValueKind == JsonValueKind.Null ? null : value.GetProperty(name).GetDouble();
 }

@@ -21,6 +21,7 @@ public sealed class NatsFactAttribute : FactAttribute
     }
 }
 
+[Collection("NatsInfrastructure")]
 public sealed class TriggerJetStreamTests
 {
     [Fact]

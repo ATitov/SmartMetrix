@@ -18,6 +18,7 @@ x-service: &service
   networks: [backend]
   environment: &common-environment
     ASPNETCORE_ENVIRONMENT: Production
+    SmartMetrix__DeploymentProfile: Production
     Persistence__Provider: Postgres
     SmartMetrix__Messaging__Url: nats://nats:4222
   depends_on:
@@ -98,6 +99,13 @@ services:
       <<: *common-environment
       Pipeline__Enabled: "true"
       Pipeline__RigId: ${SMARTMETRIX_RIG_ID:?set SMARTMETRIX_RIG_ID}
+      CaptureTrigger__Enabled: "true"
+      CaptureTrigger__RigId: ${SMARTMETRIX_RIG_ID}
+      CaptureTrigger__ExcavatorId: ${SMARTMETRIX_EXCAVATOR_ID:?set SMARTMETRIX_EXCAVATOR_ID}
+      CaptureTrigger__CoordinateSystemId: ${SMARTMETRIX_COORDINATE_SYSTEM_ID:?set SMARTMETRIX_COORDINATE_SYSTEM_ID}
+      CaptureTrigger__ConsumerName: capture-${SMARTMETRIX_RIG_ID}
+      Pipeline__RequestTimeoutSeconds: 240
+      MeasurementWorkflow__StageTimeoutSeconds: 900
       Pipeline__CalibrationUrl: http://calibration-service:8080
       Pipeline__CameraUrl: http://camera-service:8080
       Pipeline__QualityUrl: http://quality-service:8080
@@ -148,6 +156,7 @@ services:
     gpus: all
     volumes:
       - ${SMARTMETRIX_NATIVE_ROOT:-/opt/smartmetrix/native}:/app/native:ro
+      - ${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/depth:/app/data
       - /usr/local/cuda:/usr/local/cuda:ro
       - /opt/nvidia/vpi2:/opt/nvidia/vpi2:ro
       - ${SMARTMETRIX_CALIBRATION_ROOT:-/opt/smartmetrix/calibration}:/app/calibration:ro
@@ -169,10 +178,15 @@ services:
     build: { <<: *build, args: { SERVICE: SmartMetrix.SegmentationService } }
     runtime: nvidia
     gpus: all
-    volumes: ["${SMARTMETRIX_MODEL_ROOT:-/opt/smartmetrix/models}:/app/models:ro"]
+    volumes:
+      - ${SMARTMETRIX_MODEL_ROOT:-/opt/smartmetrix/models}:/app/models:ro
+      - ${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/segmentation:/app/data
     environment:
       <<: *common-environment
       Segmentation__StorageBaseUrl: http://storage-service:8080
+      Segmentation__Backend: StoneVision
+      Segmentation__StoneVisionBaseUrl: ${STONEVISION_URL:?set STONEVISION_URL}
+      Segmentation__ModelVersion: ${STONEVISION_MODEL_VERSION:?set STONEVISION_MODEL_VERSION}
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: compute,utility
     depends_on:
@@ -182,6 +196,7 @@ services:
     <<: *service
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-quality:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.QualityService } }
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/quality:/app/data"]
 
   trigger-service:
     <<: *service
@@ -189,6 +204,10 @@ services:
       nats: { condition: service_healthy }
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-trigger:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.TriggerService } }
+    environment:
+      <<: *common-environment
+      Trigger__RigId: ${SMARTMETRIX_RIG_ID}
+      Trigger__ExcavatorId: ${SMARTMETRIX_EXCAVATOR_ID}
 
   calibration-service:
     <<: *service
@@ -209,6 +228,7 @@ services:
     <<: *service
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-block-analysis:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.BlockAnalysisService } }
+    volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/analysis:/app/data"]
 
   control-point-service:
     <<: *service

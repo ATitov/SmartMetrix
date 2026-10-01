@@ -21,6 +21,7 @@ public static class ServiceDefaultsExtensions
 {
     public static WebApplicationBuilder AddSmartMetrixServiceDefaults(this WebApplicationBuilder builder)
     {
+        DeploymentProfile.Validate(builder.Configuration);
         Console.InputEncoding = Encoding.UTF8;
         Console.OutputEncoding = Encoding.UTF8;
         builder.Configuration[$"{SmartMetrixServiceOptions.SectionName}:ServiceName"] ??=

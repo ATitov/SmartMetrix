@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace SmartMetrix.QualityService;
 
@@ -8,14 +10,17 @@ public interface ILensContaminationModel
 }
 
 // Deterministic fallback. An ONNX implementation can replace this registration without changing the analyzer.
-public sealed class HeuristicLensContaminationModel : ILensContaminationModel
+public sealed class HeuristicLensContaminationModel(IOptionsMonitor<QualityOptions> configured) : ILensContaminationModel
 {
     public ValueTask<double> PredictAsync(QualityFrame frame, CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(Predict(frame, configured.CurrentValue.Metrics));
+
+    public static double Predict(QualityFrame frame, QualityMetricProfile profile)
     {
-        if (frame.GrayscalePixels.Length == 0) return ValueTask.FromResult(1d);
+        if (frame.GrayscalePixels.Length == 0) return 1;
         var mean = frame.GrayscalePixels.Average(x => (double)x);
         var variance = frame.GrayscalePixels.Average(x => Math.Pow(x - mean, 2));
-        return ValueTask.FromResult(Clamp01(1 - Math.Sqrt(variance) / 48d));
+        return Clamp01(1 - Math.Sqrt(variance) / profile.ContaminationStandardDeviationScale);
     }
 
     private static double Clamp01(double value) => Math.Clamp(value, 0, 1);
@@ -43,6 +48,14 @@ public sealed class QualityAnalyzer(
 
     public async Task<QualityResult> AssessAsync(Guid measurementId, QualityRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.Frames is null || request.Frames.Any(x => x is null || x.GrayscalePixels is null) || string.IsNullOrWhiteSpace(request.SceneType))
+            throw new ArgumentException("Frames, pixel arrays and scene type are required.");
+        var inputHash = Fingerprint(request);
+        if (store.TryGet(measurementId, out var existing))
+        {
+            if (existing!.InputSha256 != inputHash) throw new InvalidOperationException("A different frame set already exists for this processing run.");
+            return existing;
+        }
         var reasons = new HashSet<string>(StringComparer.Ordinal);
         var configured = options.CurrentValue;
         if (!configured.Scenes.TryGetValue(request.SceneType, out var thresholds))
@@ -73,7 +86,7 @@ public sealed class QualityAnalyzer(
         var metrics = new List<FrameQualityMetrics>(validFrames.Length);
         foreach (var frame in validFrames.OrderBy(x => x.CameraId, StringComparer.Ordinal))
         {
-            var frameMetrics = await CalculateAsync(frame, cancellationToken);
+            var frameMetrics = await CalculateAsync(frame, configured.Metrics, cancellationToken);
             metrics.Add(frameMetrics);
             if (frameMetrics.Sharpness < thresholds.MinimumSharpness) reasons.Add(QualityReasonCodes.LowSharpness);
             if (frameMetrics.Exposure < thresholds.MinimumExposure) reasons.Add(QualityReasonCodes.BadExposure);
@@ -84,12 +97,18 @@ public sealed class QualityAnalyzer(
         }
 
         var result = new QualityResult(measurementId, reasons.Count == 0, request.SceneType, thresholds.Version,
-            metrics, reasons.Order(StringComparer.Ordinal).ToArray(), DateTimeOffset.UtcNow);
+            metrics, reasons.Order(StringComparer.Ordinal).ToArray(), DateTimeOffset.UtcNow)
+        {
+            ThresholdProfile = thresholds,
+            MetricProfile = configured.Metrics,
+            ContaminationMethod = contaminationModel.GetType().Name,
+            InputSha256 = inputHash
+        };
         store.Save(result);
         return result;
     }
 
-    private async Task<FrameQualityMetrics> CalculateAsync(QualityFrame frame, CancellationToken cancellationToken)
+    private async Task<FrameQualityMetrics> CalculateAsync(QualityFrame frame, QualityMetricProfile profile, CancellationToken cancellationToken)
     {
         var pixels = frame.GrayscalePixels;
         var mean = pixels.Average(x => x / 255d);
@@ -104,16 +123,30 @@ public sealed class QualityAnalyzer(
                 laplacianSum += laplacian * laplacian;
                 count++;
             }
-        var sharpness = count == 0 ? 0 : Clamp01((laplacianSum / count) / 16_384d);
+        var sharpness = count == 0 ? 0 : Clamp01((laplacianSum / count) / profile.SharpnessNormalization);
         var exposure = Clamp01(1 - Math.Abs(mean - 0.5) * 2);
-        var saturation = pixels.Count(x => x <= 5 || x >= 250) / (double)pixels.Length;
-        var texture = Clamp01(Math.Sqrt(variance) * 4);
-        var shadow = pixels.Count(x => x < 38) / (double)pixels.Length;
-        var contamination = Clamp01(await contaminationModel.PredictAsync(frame, cancellationToken));
+        var saturation = pixels.Count(x => x <= profile.SaturationLow || x >= profile.SaturationHigh) / (double)pixels.Length;
+        var texture = Clamp01(Math.Sqrt(variance) * profile.TextureScale);
+        var shadow = pixels.Count(x => x < profile.ShadowThreshold) / (double)pixels.Length;
+        var contamination = Clamp01(contaminationModel is HeuristicLensContaminationModel
+            ? HeuristicLensContaminationModel.Predict(frame, profile)
+            : await contaminationModel.PredictAsync(frame, cancellationToken));
         return new(frame.CameraId, sharpness, exposure, saturation, texture, shadow, contamination);
     }
 
     private static bool IsValid(QualityFrame frame) => frame.Width > 0 && frame.Height > 0 &&
         (long)frame.Width * frame.Height == frame.GrayscalePixels.Length;
     private static double Clamp01(double value) => Math.Clamp(value, 0, 1);
+
+    private static string Fingerprint(QualityRequest request)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(new { request.SceneType, FrameCount = request.Frames.Count }));
+        foreach (var frame in request.Frames.OrderBy(x => x.CameraId, StringComparer.Ordinal))
+        {
+            hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(new { frame.CameraId, frame.Width, frame.Height, frame.HardwareTimestampNanoseconds, PixelCount = frame.GrayscalePixels.Length }));
+            hash.AppendData(frame.GrayscalePixels);
+        }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
 }

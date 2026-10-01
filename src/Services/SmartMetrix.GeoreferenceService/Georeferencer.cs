@@ -25,7 +25,7 @@ public sealed class Georeferencer
             var centre = Transform(block.Centre, chain, pose);
             var boundary = block.Boundary.Select(x => Transform(x, chain, pose)).ToArray();
             return new GeoreferencedBlock(block.BlockId, centre, boundary, Uncertainty(block.Centre, chain, pose),
-                block.EquivalentDiameterMillimetres, block.Confidence);
+                block.EquivalentDiameterMillimetres, block.Confidence, block.BoundaryKind);
         }).ToArray();
         return new(measurementId, pose.CoordinateSystemId, request.PointCloudHardwareTimestampNanoseconds,
             points, blocks, provenance);

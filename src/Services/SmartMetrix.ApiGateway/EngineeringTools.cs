@@ -102,17 +102,6 @@ public sealed class EngineeringTools(IOptions<OperatorApiOptions> options, IWebH
     private string ConfigPath() => Path.IsPathRooted(options.Value.RuntimeConfigPath)
         ? options.Value.RuntimeConfigPath : Path.Combine(environment.ContentRootPath, options.Value.RuntimeConfigPath);
 
-    private static Dictionary<string, string> Defaults() => new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["camera.adapter"] = "Arena",
-        ["camera.exposureMicroseconds"] = "5000",
-        ["camera.triggerSource"] = "Line0",
-        ["camera.pixelFormat"] = "Mono8",
-        ["depth.backend"] = "Cpu",
-        ["depth.nativeProvider"] = "OpenCvCuda",
-        ["quality.scene"] = "default",
-        ["segmentation.provider"] = "OnnxRuntime",
-        ["segmentation.modelPath"] = "models/rocks-v1.onnx",
-        ["storage.retentionDays"] = "365"
-    };
+    // Historical gateway drafts have no authoritative defaults; live values come from services.
+    private static Dictionary<string, string> Defaults() => new(StringComparer.OrdinalIgnoreCase);
 }

@@ -72,8 +72,9 @@ public sealed class StoneVisionHealthCheck(StoneVisionClient client) : IHealthCh
 }
 
 public sealed class StoneVisionProcessor(StoneVisionClient client, ISegmentationArtifactStore artifacts,
-    IOptions<SegmentationOptions> configured) : ISegmentationProcessor
+    IOptions<SegmentationOptions> configured, CrackInferenceClient? cracks = null) : ISegmentationProcessor
 {
+    private static readonly JsonSerializerOptions CrackJson = new(JsonSerializerDefaults.Web);
     public async Task<SegmentationResult> ProcessAsync(Guid measurementId, SegmentationRequest request, CancellationToken cancellationToken)
     {
         var started = Stopwatch.GetTimestamp();
@@ -83,6 +84,20 @@ public sealed class StoneVisionProcessor(StoneVisionClient client, ISegmentation
         var response = await client.DetectAsync(measurementId, frame, parameters, cancellationToken);
         var decoded = Decode(response, frame.Width, frame.Height, cancellationToken);
         var (mask, confidence, labels, detections, overlap) = decoded;
+        CrackInferenceProvenance? crackProvenance = null;
+        if (!string.IsNullOrWhiteSpace(configured.Value.CrackBaseUrl))
+        {
+            if (cracks is null) throw new InvalidOperationException("Configured crack inference client is unavailable.");
+            var prediction = await cracks.PredictAsync(measurementId, frame, cancellationToken);
+            var crackUri = await artifacts.PutAsync(measurementId, "segmentation/cracks.json", "application/json",
+                JsonSerializer.SerializeToUtf8Bytes(prediction, CrackJson), cancellationToken);
+            crackProvenance = new(prediction.ModelVersion, prediction.WeightsSha256, crackUri);
+            for (var i = 0; i < mask.Length; i++)
+                if (prediction.Mask[i] == 1)
+                {
+                    mask[i] = (byte)MaskClass.Crack; confidence[i] = prediction.Confidence[i]; labels[i] = 0;
+                }
+        }
         var rawUri = await artifacts.PutAsync(measurementId, "segmentation/stonevision.json", "application/json",
             Encoding.UTF8.GetBytes(response.GetRawText()), cancellationToken);
         var instances = new List<StoneInstance>();
@@ -108,13 +123,14 @@ public sealed class StoneVisionProcessor(StoneVisionClient client, ISegmentation
             StoneVisionClient.EncodeImage("P5", frame.Width, frame.Height, 255, confidence), cancellationToken);
         var average = confidence.Average(value => value / 255d);
         var rocks = mask.Count(value => value == (byte)MaskClass.Rock);
+        var crackPixels = mask.Count(value => value == (byte)MaskClass.Crack);
         var warnings = new List<SegmentationWarning>();
         if (detections.Count == 0) warnings.Add(new("NoDetections", "No stones were detected; background confidence is unknown."));
         if (average < configured.Value.MinimumConfidence) warnings.Add(new("LowConfidence", "Mean confidence across the entire frame is below the configured threshold."));
         if (overlap) warnings.Add(new("OverlappingInstances", "Overlapping pixels belong to the highest YOLO confidence; ties use the lower instance ID. Original masks are preserved."));
         return new(new SegmentationCreated(new MeasurementId(measurementId), maskUri, configured.Value.ModelVersion, average),
             confidenceUri, average < configured.Value.MinimumConfidence,
-            new Dictionary<string, int> { ["Background"] = mask.Length - rocks, ["Rock"] = rocks, ["Crack"] = 0 }, IsTestData: false)
+            new Dictionary<string, int> { ["Background"] = mask.Length - rocks - crackPixels, ["Rock"] = rocks, ["Crack"] = crackPixels }, IsTestData: false)
         {
             Image = new(frame.Width, frame.Height, frame.PixelFormat, frame.CameraId, frame.PixelGrid),
             Provenance = new("StoneVision", configured.Value.ModelVersion, configured.Value.StoneVisionVersion, configured.Value.WeightsVersion),
@@ -123,7 +139,8 @@ public sealed class StoneVisionProcessor(StoneVisionClient client, ISegmentation
             Instances = instances,
             InstanceMapUri = instanceMapUri,
             RawResultUri = rawUri,
-            Warnings = warnings
+            Warnings = warnings,
+            Cracks = crackProvenance
         };
     }
 

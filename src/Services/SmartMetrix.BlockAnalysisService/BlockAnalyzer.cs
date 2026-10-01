@@ -7,7 +7,7 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
 {
     private static readonly (int X, int Y)[] Neighbours = [(-1, 0), (1, 0), (0, -1), (0, 1)];
     private static readonly double[] PercentileFractions = [.10, .50, .80, .95];
-    private readonly BlockAnalysisOptions _options = configured.Value;
+    private readonly BlockAnalysisOptions _options = configured.Value.WithDefaults();
 
     public BlockAnalysisResult Analyze(Guid measurementId, BlockAnalysisRequest request)
     {
@@ -22,7 +22,8 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
         }
 
         var valid = blocks.Where(x => x.IsValid).ToArray();
-        var percentiles = PercentileFractions.Select(p => VolumeWeightedPercentile(valid, p)).ToArray();
+        var hasVolumes = valid.Any(x => x.Geometry.HasVolumeEstimate);
+        var percentiles = PercentileFractions.Select(p => hasVolumes ? (double?)VolumeWeightedPercentile(valid, p) : null).ToArray();
         var reasons = blocks.SelectMany(x => x.QualityReasons).Distinct(StringComparer.Ordinal).Order().ToList();
         if (valid.Length == 0) reasons.Add(BlockQualityReasons.NoValidBlocks);
         var confidence = valid.Length == 0 ? 0 : valid.Average(x => x.Confidence);
@@ -34,10 +35,24 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
                 ["outlierDistanceFactor"] = _options.OutlierDistanceFactor,
                 ["usesInstanceLabels"] = request.InstanceLabels is null ? 0 : 1
             });
+        var parameters = (Dictionary<string, double>)provenance.Parameters;
+        parameters["minimumDepthConfidence"] = _options.MinimumDepthConfidence;
+        parameters["minimumSegmentationConfidence"] = _options.MinimumSegmentationConfidence;
+        parameters["minimumCalibrationConfidence"] = _options.MinimumCalibrationConfidence;
+        parameters["partialVisibilityConfidenceFactor"] = _options.PartialVisibilityConfidenceFactor;
+        parameters["minimumThicknessMillimetres"] = _options.MinimumThicknessMillimetres;
+        parameters["oversizeThresholdMillimetres"] = _options.OversizeThresholdMillimetres;
+        parameters["partialVisibilityBorderPixels"] = _options.PartialVisibilityBorderPixels;
+        for (var i = 0; i < _options.SizeClassBoundariesMillimetres.Length; i++)
+            parameters[$"sizeClassBoundary{i}Millimetres"] = _options.SizeClassBoundariesMillimetres[i];
         return new(measurementId, "millimetre", "square-millimetre", "cubic-millimetre", blocks,
             SizeClasses(valid), percentiles[0], percentiles[1], percentiles[2], percentiles[3],
             valid.Count(x => x.Geometry.EquivalentDiameterMillimetres >= _options.OversizeThresholdMillimetres),
-            confidence, reasons, provenance);
+            confidence, reasons, provenance)
+        {
+            CrackPixelCount = request.CracksSupported ? request.Mask.Count(x => x == (byte)AnalysisMaskClass.Crack) : null,
+            CrackImageFraction = request.CracksSupported ? request.Mask.Count(x => x == (byte)AnalysisMaskClass.Crack) / (double)request.Mask.Count : null
+        };
     }
 
     private List<int> Flood(int seed, BlockAnalysisRequest request, bool[] visited)
@@ -75,24 +90,23 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
         var depth = points.Length == 0 ? 0 : points.Average(x => Math.Clamp(x.DepthConfidence, 0, 1));
         var segmentation = retainedPixels.Length == 0 ? 0 : retainedPixels.Average(i => Math.Clamp(request.SegmentationConfidence[i], 0, 1));
         var calibration = Math.Clamp(request.CalibrationConfidence, 0, 1);
-        if (depth < .6) reasons.Add(BlockQualityReasons.LowDepthConfidence);
-        if (segmentation < .6) reasons.Add(BlockQualityReasons.LowSegmentationConfidence);
-        if (calibration < .8) reasons.Add(BlockQualityReasons.LowCalibrationConfidence);
-        var confidence = Math.Pow(Math.Max(0, depth * segmentation * calibration), 1d / 3) * (partial ? .75 : 1);
-        var geometry = Geometry(points);
+        if (depth < _options.MinimumDepthConfidence) reasons.Add(BlockQualityReasons.LowDepthConfidence);
+        if (segmentation < _options.MinimumSegmentationConfidence) reasons.Add(BlockQualityReasons.LowSegmentationConfidence);
+        if (calibration < _options.MinimumCalibrationConfidence) reasons.Add(BlockQualityReasons.LowCalibrationConfidence);
+        var confidence = Math.Pow(Math.Max(0, depth * segmentation * calibration), 1d / 3) * (partial ? _options.PartialVisibilityConfidenceFactor : 1);
+        var geometry = SurfaceGeometry.Calculate(points, partial, _options.MinimumThicknessMillimetres);
+        if (!geometry.HasVolumeEstimate) reasons.Add(BlockQualityReasons.VolumeUnavailable);
+        var retained = retainedPixels.ToHashSet();
+        var boundary = retainedPixels.Where(i => Neighbours.Any(n =>
+        {
+            var x = i % request.Width + n.X; var y = i / request.Width + n.Y;
+            return x < 0 || y < 0 || x >= request.Width || y >= request.Height || !retained.Contains(y * request.Width + x);
+        })).Select(i => new LocalPoint(request.Points[i].XMetres, request.Points[i].YMetres, request.Points[i].ZMetres)).ToArray();
         var c = Centre(points.Length == 0 ? original : points);
         return new(Guid.NewGuid(), measurementId, request.CoordinateSystemId, new(c.XMetres, c.YMetres, c.ZMetres), geometry,
             points.Length >= _options.MinimumPointsPerBlock, partial, confidence, reasons.Order().ToArray(), request.Artifacts,
-            request.InstanceLabels?[pixels[0]]);
-    }
-
-    private static BlockGeometry Geometry(OrganizedPoint[] points)
-    {
-        if (points.Length == 0) return new(0, 0, 0, 0, 0, 0);
-        var axes = new[] { points.Max(p => p.XMetres) - points.Min(p => p.XMetres), points.Max(p => p.YMetres) - points.Min(p => p.YMetres), points.Max(p => p.ZMetres) - points.Min(p => p.ZMetres) }.OrderDescending().Select(x => x * 1000).ToArray();
-        var a = Math.Max(axes[0], .001); var b = Math.Max(axes[1], .001); var c = Math.Max(axes[2], .001);
-        var volume = Math.PI / 6 * a * b * c; var equivalent = Math.Cbrt(6 * volume / Math.PI); var area = Math.PI / 4 * a * b;
-        return new(a, b, c, equivalent, area, volume);
+            request.InstanceLabels?[pixels[0]])
+        { Boundary = boundary };
     }
 
     public static double VolumeWeightedPercentile(IEnumerable<AnalysedBlock> blocks, double fraction)
@@ -104,12 +118,25 @@ public sealed class BlockAnalyzer(IOptions<BlockAnalysisOptions> configured)
         return ordered[^1].Geometry.EquivalentDiameterMillimetres;
     }
 
-    private static Dictionary<string, int> SizeClasses(IEnumerable<AnalysedBlock> blocks) =>
-        new Dictionary<string, int> { ["0-100 mm"] = blocks.Count(x => x.Geometry.EquivalentDiameterMillimetres < 100), ["100-300 mm"] = blocks.Count(x => x.Geometry.EquivalentDiameterMillimetres >= 100 && x.Geometry.EquivalentDiameterMillimetres < 300), ["300-600 mm"] = blocks.Count(x => x.Geometry.EquivalentDiameterMillimetres >= 300 && x.Geometry.EquivalentDiameterMillimetres < 600), [">=600 mm"] = blocks.Count(x => x.Geometry.EquivalentDiameterMillimetres >= 600) };
+    private Dictionary<string, int> SizeClasses(IEnumerable<AnalysedBlock> blocks)
+    {
+        var result = new Dictionary<string, int>();
+        var low = 0d;
+        foreach (var high in _options.SizeClassBoundariesMillimetres)
+        {
+            result[FormattableString.Invariant($"{low}-{high} mm")] = blocks.Count(x => x.Geometry.EquivalentDiameterMillimetres >= low && x.Geometry.EquivalentDiameterMillimetres < high);
+            low = high;
+        }
+        result[FormattableString.Invariant($">={low} mm")] = blocks.Count(x => x.Geometry.EquivalentDiameterMillimetres >= low);
+        return result;
+    }
     private static OrganizedPoint Centre(OrganizedPoint[] p) => p.Length == 0 ? default : new(p.Average(x => x.XMetres), p.Average(x => x.YMetres), p.Average(x => x.ZMetres), p.Average(x => x.DepthConfidence));
     private static double Distance(OrganizedPoint a, OrganizedPoint b) => Math.Sqrt(Math.Pow(a.XMetres - b.XMetres, 2) + Math.Pow(a.YMetres - b.YMetres, 2) + Math.Pow(a.ZMetres - b.ZMetres, 2));
     private static void Validate(BlockAnalysisRequest request)
     {
+        if (!double.IsFinite(request.CalibrationConfidence) || request.CalibrationConfidence is < 0 or > 1 ||
+            request.SegmentationConfidence.Any(x => !float.IsFinite(x) || x is < 0 or > 1))
+            throw new ArgumentException("Confidence values must be finite and in [0,1].");
         if (request.Width <= 0 || request.Height <= 0 || (long)request.Width * request.Height != request.Points.Count || request.Points.Count != request.Mask.Count || request.Mask.Count != request.SegmentationConfidence.Count) throw new ArgumentException("Point cloud, mask and confidence map must be non-empty organized arrays of equal dimensions.");
         if (string.IsNullOrWhiteSpace(request.CoordinateSystemId)) throw new ArgumentException("Coordinate system is required.");
         if (request.Mask.Any(x => x > (byte)AnalysisMaskClass.Crack)) throw new ArgumentException("Mask contains an unsupported class.");

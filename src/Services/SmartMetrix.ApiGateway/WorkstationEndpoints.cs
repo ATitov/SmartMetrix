@@ -8,7 +8,8 @@ namespace SmartMetrix.ApiGateway;
 public static class WorkstationEndpoints
 {
     private static readonly string[] Stages = ["calibration", "capture", "pose", "quality", "depth", "segmentation", "analysis", "georeference", "result"];
-    private static readonly string[] ReadinessServices = ["orchestrator", "trigger", "camera", "quality", "depth", "segmentation", "storage", "positioning"];
+    private static readonly string[] ReadinessServices = ["orchestrator", "trigger", "camera", "quality", "depth", "segmentation", "storage", "positioning", "calibration", "analysis", "georeference"];
+    private static readonly string[] RuntimeServices = ["camera", "depth", "segmentation", "quality", "analysis"];
 
     public static IServiceCollection AddWorkstationApi(this IServiceCollection services, IConfiguration configuration)
     {
@@ -79,6 +80,7 @@ public static class WorkstationEndpoints
         });
         api.MapGet("/workstations", (ClaimsPrincipal user, IOptions<WorkstationOptions> options) => Results.Ok(new
         {
+            scoped = options.Value.Scopes.Count > 0,
             roles = user.FindAll(ClaimTypes.Role).Select(x => x.Value).Where(OperatorRoles.All.Contains).Distinct(),
             scopes = options.Value.Scopes.Where(x => WorkstationIdentity.CanAccess(user, x.Id))
                 .Select(x => new { x.Id, x.SiteId, x.ExcavatorId, x.RigId, x.CoordinateSystemId })
@@ -228,6 +230,26 @@ public static class WorkstationEndpoints
         });
 
         var engineering = scope.MapGroup("/engineer").RequireAuthorization(policy => policy.RequireRole(OperatorRoles.Engineer));
+        engineering.MapGet("/audit", async (HttpContext context, IAuditStore audit, CancellationToken ct) =>
+            Results.Ok((await audit.ReadAsync(ct)).Where(x => x.ScopeId == Area(context).Id)));
+        engineering.MapGet("/config", async (HttpContext context, WorkstationBackend backend, CancellationToken ct) =>
+        {
+            var snapshots = new JsonObject();
+            foreach (var name in RuntimeServices)
+            {
+                try { snapshots[name] = await backend.GetAsync(Area(context), name, "v1/configuration", ct); }
+                catch (WorkstationApiException error) { snapshots[name] = new JsonObject { ["error"] = error.Code }; }
+            }
+            return Results.Ok(snapshots);
+        });
+        engineering.MapPut("/config/{service}", async (string service, SmartMetrix.ServiceDefaults.RuntimeSettingsUpdate request,
+            HttpContext context, WorkstationBackend backend, IAuditStore audit, CancellationToken ct) =>
+        {
+            if (!RuntimeServices.Contains(service)) throw new WorkstationApiException(400, "UnsupportedRuntimeSettings");
+            var result = await backend.SendAsync(Area(context), service, HttpMethod.Put, "v1/configuration", request, Actor(context), ct);
+            await Log(audit, context, "configuration.apply", null, service, ct);
+            return Results.Ok(result);
+        });
         engineering.MapPost("/measurements/{id:guid}/{command}", async (Guid id, string command, WorkstationMutation request,
             HttpContext context, WorkstationBackend backend, IAuditStore audit, CancellationToken ct) =>
         {
@@ -253,6 +275,9 @@ public static class WorkstationEndpoints
             Results.Ok(WorkstationBackend.WithoutLocations(await backend.GetAsync(Area(context), "segmentation", "v1/segmentation/capabilities", ct))));
 
         api.MapGet("/engineer/system", (EngineeringTools tools) => Results.Ok(tools.SystemSnapshot()))
+            .RequireAuthorization(policy => policy.RequireRole(OperatorRoles.Engineer));
+        api.MapGet("/engineer/logs", (string? service, string? level, int? take, EngineeringTools tools) =>
+            Results.Ok(tools.ReadLogs(service, level, take ?? 100)))
             .RequireAuthorization(policy => policy.RequireRole(OperatorRoles.Engineer));
 
         var backups = api.MapGroup("/administrator/backups").RequireAuthorization(policy => policy.RequireRole(OperatorRoles.Administrator));

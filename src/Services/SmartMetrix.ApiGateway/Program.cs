@@ -147,10 +147,12 @@ api.MapGet("/engineering/system", (EngineeringTools tools) => Results.Ok(tools.S
     .RequireAuthorization(OperatorPolicies.DangerousCommand);
 api.MapGet("/engineering/logs", (string? service, string? level, int? take, EngineeringTools tools) =>
     Results.Ok(tools.ReadLogs(service, level, take ?? 100))).RequireAuthorization(OperatorPolicies.DangerousCommand);
-api.MapGet("/engineering/config", (EngineeringTools tools, CancellationToken ct) => tools.GetConfigurationAsync(ct))
+api.MapGet("/engineering/config", async (EngineeringTools tools, CancellationToken ct) =>
+    Results.Ok(new { source = "gateway-draft", applied = false, values = await tools.GetConfigurationAsync(ct) }))
     .RequireAuthorization(OperatorPolicies.DangerousCommand);
-api.MapPut("/engineering/config", (Dictionary<string, string> values, EngineeringTools tools, CancellationToken ct) =>
-    tools.SaveConfigurationAsync(values, ct)).RequireAuthorization(OperatorPolicies.DangerousCommand);
+api.MapPut("/engineering/config", () => Results.Problem(statusCode: 409, title: "UseScopedConfigurationApi",
+    detail: "Apply settings through the scoped engineer API; gateway drafts are not active service configuration."))
+    .RequireAuthorization(OperatorPolicies.DangerousCommand);
 
 api.MapPost("/measurements", async (StartOperatorMeasurement request, HttpContext context,
     OperatorBackendClient backend, IAuditStore audit, CancellationToken ct) =>

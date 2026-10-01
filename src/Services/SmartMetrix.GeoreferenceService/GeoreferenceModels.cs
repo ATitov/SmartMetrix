@@ -22,7 +22,7 @@ public sealed record ExposurePose(
     double[] Covariance);
 
 public sealed record CameraBlock(Guid BlockId, LocalPoint Centre, IReadOnlyList<LocalPoint> Boundary,
-    double EquivalentDiameterMillimetres, double Confidence);
+    double EquivalentDiameterMillimetres, double Confidence, string BoundaryKind = "unspecified");
 
 public sealed record GeoreferenceRequest(
     long PointCloudHardwareTimestampNanoseconds,
@@ -35,7 +35,7 @@ public sealed record GeoreferenceRequest(
 public sealed record TransformProvenance(string FromCoordinateSystemId, string ToCoordinateSystemId, string Version);
 public sealed record GeoreferencedPoint(LocalPoint Position, double PositionUncertaintyMetres);
 public sealed record GeoreferencedBlock(Guid BlockId, LocalPoint Centre, IReadOnlyList<LocalPoint> Boundary,
-    double PositionUncertaintyMetres, double EquivalentDiameterMillimetres, double Confidence);
+    double PositionUncertaintyMetres, double EquivalentDiameterMillimetres, double Confidence, string BoundaryKind = "unspecified");
 
 public sealed class GeoreferenceResult
 {

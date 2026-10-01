@@ -13,6 +13,16 @@ public sealed class NativeStereoBackend(IOptions<DepthOptions> configured) : ISt
     private const string LibraryName = "smartmetrix_stereo";
     private readonly DepthOptions options = configured.Value;
 
+    public void CheckReadiness()
+    {
+        try
+        {
+            if (options.NativeProvider != "OpenCvCuda" || Native.Probe() != 1) throw NotConfigured();
+        }
+        catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        { throw NotConfigured(); }
+    }
+
     public DisparityMap Compute(GrayFrame left, GrayFrame right, StereoPairCalibration calibration)
     {
         if (left.Width != right.Width || left.Height != right.Height ||
@@ -80,6 +90,8 @@ public sealed class NativeStereoBackend(IOptions<DepthOptions> configured) : ISt
     [StructLayout(LayoutKind.Sequential)] private struct NativeOutput { public nint Disparity, Confidence; public int Count; }
     private static class Native
     {
+        [DllImport(LibraryName, EntryPoint = "smartmetrix_stereo_probe")]
+        internal static extern int Probe();
         [DllImport(LibraryName, EntryPoint = "smartmetrix_stereo_compute")]
         internal static extern NativeStatus Compute(ref NativeConfiguration configuration, byte[] left, byte[] right,
             int width, int height, out NativeOutput output);
