@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const http = require('node:http');
 const { chromium } = require(process.env.SMARTMETRIX_PLAYWRIGHT || 'playwright');
-const root = path.resolve(__dirname, '../../docs/gui-prototype');
+const root = path.resolve(__dirname, '../../src/docs/gui-prototype');
 const output = path.resolve(__dirname, '../../artifacts/gui');
 const names = {operator:'Пульт измерения',geologist:'Анализ горного массива',surveyor:'Пространственная привязка',engineer:'Диагностика комплекса',administrator:'Управление системой'};
 let server, browser, base;

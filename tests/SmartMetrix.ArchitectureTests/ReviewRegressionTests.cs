@@ -13,6 +13,17 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class ReviewRegressionTests
 {
+    [Theory]
+    [InlineData("ЭКГ-12", true)]
+    [InlineData("карьер:локальная", true)]
+    [InlineData("../outside", false)]
+    [InlineData("exc\n12", false)]
+    public void WorkstationResourcesAllowDatasetIdentifiersWithoutAllowingPaths(string value, bool valid)
+    {
+        Assert.Equal(valid, SmartMetrix.ApiGateway.WorkstationIdentity.ResourceIdentifier(value));
+        Assert.False(SmartMetrix.ApiGateway.WorkstationIdentity.Identifier(value));
+    }
+
     [Fact]
     public async Task MeasurementSnapshotsRemainReadableDuringConcurrentReplacement()
     {

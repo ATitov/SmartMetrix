@@ -242,7 +242,7 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
             calibrationAccuracy = payload.GetProperty("accuracy"),
             modelVersion = segmentation.GetProperty("event").GetProperty("modelVersion"),
             transformVersion = poseResult.GetProperty("transformVersion"),
-            isTestData = Text(captureResponse, "adapter") == "Simulator" || !segmentation.TryGetProperty("isTestData", out var test) || test.GetBoolean(),
+            isTestData = MeasurementDataProvenance.IsTestData(captureResponse, segmentation),
             analysis,
             georeference = await Load("georeference"),
             stages = process.Pipeline.Stages

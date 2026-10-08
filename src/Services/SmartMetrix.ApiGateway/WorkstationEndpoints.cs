@@ -16,7 +16,8 @@ public static class WorkstationEndpoints
         services.AddOptions<WorkstationOptions>().Bind(configuration.GetSection(WorkstationOptions.Section))
             .Validate(options => options.TimeoutSeconds is >= 1 and <= 120 &&
                 options.Scopes.Select(x => x.Id).Distinct().Count() == options.Scopes.Count &&
-                options.Scopes.All(x => new[] { x.Id, x.SiteId, x.ExcavatorId, x.RigId, x.CoordinateSystemId }.All(WorkstationIdentity.Identifier) &&
+                options.Scopes.All(x => WorkstationIdentity.Identifier(x.Id) &&
+                    new[] { x.SiteId, x.ExcavatorId, x.RigId, x.CoordinateSystemId }.All(WorkstationIdentity.ResourceIdentifier) &&
                     x.Services.Values.All(v => Uri.TryCreate(v, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo))),
                 "Invalid workstation scope configuration.").ValidateOnStart();
         services.AddHttpClient<WorkstationBackend>((provider, client) =>
@@ -24,6 +25,8 @@ public static class WorkstationEndpoints
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddSingleton<WorkstationReviewStore>();
         services.AddSingleton<WorkstationBackups>();
+        services.AddOptions<ExcavationReportOptions>().Bind(configuration.GetSection(ExcavationReportOptions.Section));
+        services.AddSingleton<ExcavationReportStore>();
         services.AddAntiforgery(options => options.HeaderName = "X-CSRF-Token");
         return services;
     }
@@ -98,6 +101,7 @@ public static class WorkstationEndpoints
             return await next(invocation);
         });
 
+        scope.MapExcavationReports();
         scope.MapGet("/operator/status", async (HttpContext context, WorkstationBackend backend, CancellationToken ct) =>
         {
             var area = Area(context);
@@ -171,7 +175,10 @@ public static class WorkstationEndpoints
         {
             var area = Area(context);
             // Check ownership even for an idempotent replay.
-            await backend.MeasurementAsync(area, id, ct);
+            var measurement = await backend.MeasurementAsync(area, id, ct);
+            if (request.Decision == "Approved" &&
+                (measurement["isTestData"] is not JsonValue testFlag || !testFlag.TryGetValue<bool>(out var isTestData) || isTestData))
+                throw new WorkstationApiException(409, "TestResultCannotBeApproved");
             var review = await reviews.SaveAsync(new(area.Id, id, request.CommandId, request.ExpectedVersion, request.Decision,
                 request.Reason, Actor(context), DateTimeOffset.UtcNow), async () =>
                 {

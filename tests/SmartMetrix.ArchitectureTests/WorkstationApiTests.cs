@@ -12,6 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SmartMetrix.ApiGateway;
+using SmartMetrix.Domain.Excavation;
+using SmartMetrix.ExcavatorReplay;
 
 namespace SmartMetrix.ArchitectureTests;
 
@@ -23,6 +25,7 @@ public sealed class WorkstationApiTests : IAsyncLifetime, IDisposable
     private WebApplication app = null!;
     private HttpClient client = null!;
     private int writes;
+    private bool testMeasurement;
     private static readonly string[] Roles = ["operator", "geologist", "surveyor", "engineer", "administrator"];
 
     public async Task InitializeAsync()
@@ -34,6 +37,7 @@ public sealed class WorkstationApiTests : IAsyncLifetime, IDisposable
         // Cookie/CSRF tests must not depend on the Windows user's persistent key ring.
         builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
         builder.Services.AddWorkstationApi(builder.Configuration);
+        builder.Services.Configure<ExcavationReportOptions>(options => options.Roots["north"] = Path.Combine(root, "replays"));
         builder.Services.Configure<WorkstationOptions>(options =>
         {
             options.Scopes.Add(new()
@@ -108,6 +112,90 @@ public sealed class WorkstationApiTests : IAsyncLifetime, IDisposable
         Key(key);
         using var response = await client.GetAsync("/api/v1/scopes/north/measurements");
         Assert.Equal(status, (int)response.StatusCode);
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions ReplayJson = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    private ReplayRunResult CreateReplay(string excavatorId = "rig")
+    {
+        var origin = new DateTimeOffset(2026, 10, 4, 8, 0, 0, TimeSpan.FromHours(6));
+        ExcavationPhase[] phases = [ExcavationPhase.Digging, ExcavationPhase.LoadedSwing, ExcavationPhase.Unloading,
+            ExcavationPhase.Returning, ExcavationPhase.Waiting, ExcavationPhase.Waiting];
+        var samples = phases.Select((phase, index) => new ExcavatorTelemetry(1, Guid.NewGuid(), excavatorId, "fixture", "clock",
+            index * 1_000_000_000L, origin.AddSeconds(index), true, SignalQuality.Good, true,
+            phase == ExcavationPhase.Digging, phase == ExcavationPhase.Unloading, phase == ExcavationPhase.LoadedSwing,
+            phase is ExcavationPhase.LoadedSwing or ExcavationPhase.Returning ? 10 : 0, 0));
+        var input = Path.Combine(root, "telemetry-" + Guid.NewGuid().ToString("N") + ".jsonl");
+        File.WriteAllLines(input, samples.Select(x => System.Text.Json.JsonSerializer.Serialize(x, ReplayJson)));
+        return ReplayRunner.Run(input, Path.Combine(root, "replays"), origin, origin.AddSeconds(10));
+    }
+
+    [Theory]
+    [InlineData(null, 401)]
+    [InlineData("no-scope", 403)]
+    [InlineData("test-operator", 200)]
+    public async Task ExcavationReportsRequireAuthenticationAndScope(string? key, int expected)
+    {
+        CreateReplay();
+        Key(key);
+        using var response = await client.GetAsync("/api/v1/scopes/north/excavation/runs");
+        Assert.Equal(expected, (int)response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExcavationReportsHideOtherMachinesAndExportValidatedCsv()
+    {
+        var own = CreateReplay();
+        var foreign = CreateReplay("other-machine");
+        Key("test-operator");
+        var list = await client.GetStringAsync("/api/v1/scopes/north/excavation/runs");
+        Assert.Contains(own.RunId, list, StringComparison.Ordinal);
+        Assert.DoesNotContain(foreign.RunId, list, StringComparison.Ordinal);
+        Assert.DoesNotContain(root, list, StringComparison.Ordinal);
+        using var hidden = await client.GetAsync($"/api/v1/scopes/north/excavation/runs/{foreign.RunId}/report");
+        Assert.Equal(HttpStatusCode.NotFound, hidden.StatusCode);
+        using var csv = await client.GetAsync($"/api/v1/scopes/north/excavation/runs/{own.RunId}/csv");
+        Assert.Equal(HttpStatusCode.OK, csv.StatusCode);
+        Assert.Equal("text/csv", csv.Content.Headers.ContentType!.MediaType);
+        Assert.Equal("attachment", csv.Content.Headers.ContentDisposition!.DispositionType);
+        Assert.Contains("true", await csv.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        var detail = await client.GetStringAsync($"/api/v1/scopes/north/excavation/runs/{own.RunId}/report");
+        Assert.Contains("\"isSynthetic\":true", detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExcavationCorruptionIsExcludedAndCannotBeExported()
+    {
+        var run = CreateReplay();
+        File.AppendAllText(Path.Combine(run.Directory, "shift-report.json"), "corrupt");
+        Key("test-engineer");
+        var list = JsonNode.Parse(await client.GetStringAsync("/api/v1/scopes/north/excavation/runs"))!;
+        Assert.Equal("Degraded", list["state"]!.GetValue<string>());
+        Assert.Equal(1, list["invalidCount"]!.GetValue<int>());
+        Assert.Empty(list["items"]!.AsArray());
+        using var report = await client.GetAsync($"/api/v1/scopes/north/excavation/runs/{run.RunId}/report");
+        using var csv = await client.GetAsync($"/api/v1/scopes/north/excavation/runs/{run.RunId}/csv");
+        Assert.Equal(HttpStatusCode.Conflict, report.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, csv.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExcavationMalformedManifestDoesNotBreakRunListing()
+    {
+        var run = CreateReplay();
+        File.WriteAllText(Path.Combine(run.Directory, "manifest.json"), "{}");
+        Key("test-operator");
+        var list = JsonNode.Parse(await client.GetStringAsync("/api/v1/scopes/north/excavation/runs"))!;
+        Assert.Equal(1, list["invalidCount"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task ExcavationInvalidIdsCannotAddressArbitraryFiles()
+    {
+        CreateReplay();
+        Key("test-operator");
+        using var response = await client.GetAsync("/api/v1/scopes/north/excavation/runs/manifest.json/report");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Theory]
@@ -289,6 +377,18 @@ public sealed class WorkstationApiTests : IAsyncLifetime, IDisposable
         if (value is not null) client.DefaultRequestHeaders.Add("X-API-Key", value);
     }
 
+    [Fact]
+    public async Task SyntheticResultCannotReceiveProductionApproval()
+    {
+        testMeasurement = true;
+        Key("test-geologist");
+        var request = new WorkstationDecision(Guid.NewGuid(), 3, "Approved", "Checked boundaries");
+        using var response = await client.PostAsJsonAsync($"/api/v1/scopes/north/geologist/measurements/{measurementId}/reviews", request);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("TestResultCannotBeApproved", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Empty(await app.Services.GetRequiredService<WorkstationReviewStore>().ListAsync("north", measurementId, CancellationToken.None));
+    }
+
     private sealed class BackendHandler(WorkstationApiTests owner) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -303,6 +403,7 @@ public sealed class WorkstationApiTests : IAsyncLifetime, IDisposable
                 version = 3,
                 status = "Completed",
                 d50 = 240,
+                isTestData = owner.testMeasurement,
                 pipeline = new { stages = new[] { new { name = "analysis", artifactUri = "http://internal-secret/data" } } }
             };
             object foreign = new { id = owner.foreignId, excavatorId = "other", coordinateSystemId = "quarry", version = 3, status = "Completed" };

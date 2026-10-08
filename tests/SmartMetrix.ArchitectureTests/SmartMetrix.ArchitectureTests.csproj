@@ -41,6 +41,7 @@
     <ProjectReference Include="..\..\src\Services\SmartMetrix.ApiGateway\SmartMetrix.ApiGateway.csproj" />
     <ProjectReference Include="..\..\src\Services\SmartMetrix.CloudSyncService\SmartMetrix.CloudSyncService.csproj" />
     <ProjectReference Include="..\..\tools\SmartMetrix.E2ESimulator\SmartMetrix.E2ESimulator.csproj" />
+    <ProjectReference Include="..\..\tools\SmartMetrix.ExcavatorReplay\SmartMetrix.ExcavatorReplay.csproj" />
   </ItemGroup>
 
 </Project>

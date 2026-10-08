@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SmartMetrix — Работа экскаватора</title>
+  <link rel="stylesheet" href="/assets/smartmetrix.css">
+  <link rel="stylesheet" href="/assets/excavation.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><div class="mark">SM</div><div><b>SmartMetrix</b><small>Edge measurement</small></div></div>
+    <nav aria-label="Разделы"><a href="/operator/">Оператор</a><a href="/engineer/">Инженер</a><a class="active" aria-current="page" href="/excavation/">Работа экскаватора</a></nav>
+    <div class="rail-footer muted">Сохранённые смены<br>Циклы · телеметрия · отчёты</div>
+  </aside>
+  <main class="workspace">
+    <header class="topbar">
+      <div><div class="eyebrow">РАБОЧИЙ ПРОЦЕСС</div><h1>Работа экскаватора</h1><p class="muted">Рабочие циклы и покрытие телеметрии за смену</p></div>
+      <div class="controls"><span id="currentUser" class="muted"></span><button class="button" id="refresh">Обновить</button><button class="button" id="logout">Выйти</button></div>
+    </header>
+    <section class="card selection" aria-label="Выбор отчёта">
+      <label class="filter">Область / экскаватор<select id="scopeSelector" aria-label="Область измерений" disabled><option>Загрузка…</option></select></label>
+      <label class="filter">Сохранённая смена<select id="runSelector" aria-label="Сохранённая смена" disabled><option>Выберите область</option></select></label>
+      <button class="button primary" id="exportCsv" disabled>Скачать CSV</button>
+    </section>
+    <p id="loading" role="status" aria-live="polite">Загрузка доступных областей…</p>
+    <div id="error" class="card error" role="alert" hidden></div>
+    <div id="empty" class="card empty" hidden></div>
+    <div id="storageWarning" class="warning" role="status" hidden></div>
+    <div id="report" hidden>
+      <div id="dataMode" class="mode-banner" role="status"></div>
+      <section class="kpis excavation-kpis" aria-label="Сводка смены">
+        <article class="card kpi"><div class="caption">Завершённых циклов</div><div id="completed" class="kpi-value">—</div><small class="muted">По времени завершения в смене</small></article>
+        <article class="card kpi"><div class="caption">Прервано / не завершено</div><div id="interrupted" class="kpi-value">—</div><small class="muted">Пропуски и незавершённая запись</small></article>
+        <article class="card kpi"><div class="caption">Время копания</div><div id="digging" class="kpi-value">—</div><small class="muted">По известным сигналам</small></article>
+        <article class="card kpi"><div class="caption">Покрытие телеметрии</div><div id="coverage" class="kpi-value">—</div><small id="unknown" class="muted"></small></article>
+      </section>
+      <section class="section card">
+        <div class="section-head"><div><h2>Лента рабочих фаз</h2><p id="shiftBounds" class="muted"></p></div><span class="muted">Сохранённый отчёт · без live-потока</span></div>
+        <div id="phaseLegend" class="phase-legend" aria-label="Обозначения фаз"></div>
+        <div id="phaseTimeline" class="phase-track" role="img" aria-label="Распределение рабочих фаз по времени"></div>
+        <div class="time-axis"><span id="axisStart"></span><span id="axisEnd"></span></div>
+        <div class="table-wrap phase-table"><table><caption class="sr-only">Длительность каждой фазы за смену</caption><thead><tr><th>Фаза</th><th>Время</th><th>Доля смены</th></tr></thead><tbody id="phaseTotals"></tbody></table></div>
+      </section>
+      <section class="section">
+        <div class="section-head"><div><h2>Рабочие циклы</h2><p id="cycleCount" class="muted"></p></div><label class="filter">Статус<select id="cycleFilter"><option value="">Все циклы</option><option value="Completed">Завершённые</option><option value="Interrupted">Прерванные</option><option value="Incomplete">Незавершённые</option></select></label></div>
+        <div class="table-wrap"><table class="cycle-table"><caption class="sr-only">Циклы экскаватора, пересекающие смену</caption><thead><tr><th>Начало</th><th>Длительность</th><th>Статус</th><th>Причина / граница смены</th><th>Детали</th></tr></thead><tbody id="cycles"></tbody></table></div>
+      </section>
+      <section class="section card"><h2>Источник и доступность показателей</h2><dl id="provenance" class="provenance"></dl><p class="muted">Масса, т/ч и л/т пока неизвестны: взвешивание и расход топлива не подключены. Карта породы не связана с циклами.</p></section>
+    </div>
+  </main>
+</div>
+<dialog id="cycleDialog"><h2>Фазы цикла</h2><p id="cycleIdentity" class="muted"></p><div id="cycleDetails"></div><div class="actions"><button class="button" id="closeCycle">Закрыть</button></div></dialog>
+<script src="/assets/excavation.js" defer></script>
+</body>
+</html>

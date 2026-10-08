@@ -116,3 +116,33 @@ test('Engineer cannot switch scope while settings are being applied', async () =
     assert.deepEqual(f.errors, []);
   } finally { release(); await f.browser.close(); }
 });
+
+test('Missing configuration never renders healthy diagnostics or enables capture', async () => {
+  const f = await fixture('operator');
+  try {
+    await f.page.route('**/operator/status', route => route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({state:'Degraded',triggerConditionsChecked:false,checks:[{name:'camera',state:'NotConfigured',checkedAt:'2026-09-30T12:00:00Z'}]})}));
+    await f.page.locator('#refresh').click();
+    await f.page.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+    assert.ok((await f.page.locator('#systemState').textContent()).includes('Требуется настройка'));
+    assert.ok(!(await f.page.locator('#components').textContent()).includes('Диагностика без замечаний'));
+    assert.ok(await f.page.locator('#start').isDisabled());
+    assert.equal(await f.page.locator('#activeMeasurement').textContent(),'Не предоставлено API');
+    assert.deepEqual(f.errors,[]);
+  } finally { await f.browser.close(); }
+});
+
+test('Test measurements are visibly marked and stale data cannot start a capture', async () => {
+  const f = await fixture('operator');
+  try {
+    await f.page.route('**/measurements', route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({items:[{id,excavatorId:'EX-N',status:'Completed',version:3,isTestData:true}]})}));
+    await f.page.locator('#refresh').click();
+    await f.page.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+    assert.ok((await f.page.locator('#measurements').textContent()).includes('Тестовые данные'));
+    await f.page.route('**/operator/status', route=>route.fulfill({status:503,body:'Service unavailable'}));
+    await f.page.locator('#refresh').click();
+    await f.page.waitForFunction(()=>!document.querySelector('#refresh').disabled);
+    assert.ok(await f.page.locator('#start').isDisabled());
+    assert.ok((await f.page.locator('#freshness').textContent()).includes('Нет актуальных данных'));
+    assert.deepEqual(f.errors,[]);
+  } finally { await f.browser.close(); }
+});

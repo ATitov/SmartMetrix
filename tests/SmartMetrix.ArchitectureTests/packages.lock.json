@@ -601,6 +601,12 @@
           "SmartMetrix.SegmentationService": "[1.0.0, )"
         }
       },
+      "smartmetrix.excavatorreplay": {
+        "type": "Project",
+        "dependencies": {
+          "SmartMetrix.Domain": "[1.0.0, )"
+        }
+      },
       "smartmetrix.georeferenceservice": {
         "type": "Project",
         "dependencies": {

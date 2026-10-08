@@ -103,11 +103,13 @@ function toast(message, isError = false) {
 }
 
 function renderStatus(status) {
-  if (status.checks) state.status = status = { ...status, configured:true, components:status.checks.map(check => ({ ...check, kind:check.name })) };
+  if (status.checks) state.status = status = { ...status, configured:status.checks.length > 0 && status.checks.every(check => check.state !== 'NotConfigured'), components:status.checks.map(check => ({ ...check, kind:check.name })), checkedAt:status.checkedAt || status.checks.map(check=>check.checkedAt).filter(Boolean).sort()[0] };
   const root = document.querySelector('#systemState');
-  root.innerHTML = `<div class="status-line ${cssState(status.state)}"><span class="dot"></span><b>${esc(label(status.state))}</b></div><div class="metric">${status.configured ? 'Система доступна' : 'Требуется настройка'}</div><div class="muted">Проверено ${date(status.checkedAt)}</div>`;
-  document.querySelector('#activeMeasurement').textContent = status.activeMeasurementId || 'Нет активного измерения';
-  document.querySelector('#components').innerHTML = (status.components || []).map(component => `<article class="card component"><div class="caption">${esc(component.kind)}</div><h3>${esc(component.name)}</h3><div class="status-line ${cssState(component.state)}"><span class="dot"></span>${esc(label(component.state))}</div><p class="muted">${esc(component.detail || 'Диагностика без замечаний')}</p></article>`).join('');
+  root.innerHTML = `<div class="status-line ${cssState(status.state)}"><span class="dot"></span><b>${esc(label(status.state))}</b></div><div class="metric">${!status.configured ? 'Требуется настройка' : status.state === 'Ready' ? 'Сервисы доступны' : 'Есть недоступные компоненты'}</div><div class="muted">Проверено ${date(status.checkedAt)}${status.triggerConditionsChecked === false ? ' · Условия съёмки не проверены' : ''}</div>`;
+  document.querySelector('#activeMeasurement').textContent = status.activeMeasurementId || (status.checks ? 'Не предоставлено API' : 'Нет активного измерения');
+  document.querySelector('#components').innerHTML = (status.components || []).map(component => `<article class="card component"><div class="caption">${esc(component.kind)}</div><h3>${esc(component.name)}</h3><div class="status-line ${cssState(component.state)}"><span class="dot"></span>${esc(label(component.state))}</div><p class="muted">${esc(component.detail || (component.state === 'Ready' ? 'Сервис отвечает на проверку готовности' : 'Готовность не подтверждена'))}</p></article>`).join('');
+  const start = document.querySelector('#start');
+  if (start) start.disabled = status.state !== 'Ready' || (state.scoped && !state.scopeId) || !state.roles.some(role => ['operator','engineer'].includes(role));
   if (mode === 'engineer') renderConfiguration(status.components || []);
 }
 
@@ -140,7 +142,7 @@ function renderMeasurements() {
   body.innerHTML = items.length ? items.map(item => {
     const actions = mode !== 'engineer' ? '' : `${['Failed','Rejected'].includes(item.status) ? `<button class="button" data-retry="${esc(item.id)}" data-version="${item.version ?? 0}">Повторить</button>` : ''} ${isActive(item.status) ? `<button class="button danger" data-cancel="${esc(item.id)}" data-version="${item.version ?? 0}">Отменить</button>` : ''}`;
     const result = item.d50 == null && item.d80 == null ? '<span class="muted">Нет результата</span>' : `${item.d50 ?? '—'} / ${item.d80 ?? '—'}`;
-    return `<tr><td><button class="link" data-detail="${esc(item.id)}">${esc(String(item.id).slice(0,8))}…</button><br><small class="muted">${esc(item.excavatorId)}</small></td><td><span class="pill ${cssState(item.status)}">${esc(label(item.status))}</span></td><td>${date(item.updatedAt)}</td><td>${result}</td><td>${item.confidence == null ? '—' : Math.round(item.confidence * 100) + '%'}</td><td>${actions}</td></tr>`;
+    return `<tr><td><button class="link" data-detail="${esc(item.id)}">${esc(String(item.id).slice(0,8))}…</button><br><small class="muted">${esc(item.excavatorId)}</small>${item.isTestData === true ? '<br><strong class="state-warning">Тестовые данные</strong>' : item.isTestData !== false ? '<br><span class="state-warning">Происхождение не подтверждено</span>' : ''}</td><td><span class="pill ${cssState(item.status)}">${esc(label(item.status))}</span></td><td>${date(item.updatedAt)}</td><td>${result}</td><td>${item.confidence == null ? '—' : Math.round(item.confidence * 100) + '%'}</td><td>${actions}</td></tr>`;
   }).join('') : '<tr><td colspan="6" class="empty">Измерений пока нет. Создайте первое измерение кнопкой выше.</td></tr>';
 }
 
@@ -162,7 +164,7 @@ function renderConfiguration(components) {
 function renderResultVisual(item) {
   const root = document.querySelector('#resultVisual');
   if (!root) return;
-  if (item.d50 == null) { root.innerHTML = '<div class="empty">Расчётный результат для этого измерения отсутствует</div>'; return; }
+  if (item.d50 == null) { root.innerHTML = `${item.isTestData === true ? '<div class="warning">Тестовые данные: не использовать для производственных решений.</div>' : ''}<div class="empty">Расчётный результат для этого измерения отсутствует</div>`; return; }
   const values = [['D10',item.d10],['D20',item.d20],['D50',item.d50],['D80',item.d80],['D90',item.d90],['D95',item.d95]];
   const shownValues = values.filter(([,value]) => value != null);
   const maximum = Math.max(...values.map(([,value]) => value || 0), 1);
@@ -219,6 +221,7 @@ async function loadLogs() {
 
 function updateFreshness() {
   const root = document.querySelector('#freshness');
+  if (state.readFailure) { root.textContent = 'Нет актуальных данных: связь или сервис недоступны'; root.className = 'freshness stale'; return; }
   if (!state.lastSuccess) { root.textContent = 'Ожидание данных'; root.className = 'freshness stale'; return; }
   const seconds = Math.max(0, Math.round((Date.now() - state.lastSuccess) / 1000));
   root.textContent = seconds < 2 ? 'Данные обновлены сейчас' : `Обновлено ${seconds} сек назад`;
@@ -241,6 +244,7 @@ async function refresh() {
     state.measurements = Array.isArray(measurements) ? measurements : measurements.items || [];
     state.audit = Array.isArray(audit) ? audit : [];
     state.lastSuccess = Date.now();
+    state.readFailure = false;
     renderStatus(status);
     populateStatuses();
     renderMeasurements();
@@ -248,7 +252,10 @@ async function refresh() {
     renderKpis();
   } catch (error) {
     banner.hidden = false;
+    state.readFailure = true;
     banner.textContent = `Не удалось получить данные: ${error.message}`;
+    document.querySelector('#start')?.setAttribute('disabled', '');
+    document.querySelector('#freshness').textContent = 'Связь потеряна: показаны последние полученные данные';
   } finally {
     state.refreshing = false;
     button.disabled = false;

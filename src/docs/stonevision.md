@@ -37,7 +37,7 @@ docker compose -f docker-compose.yml -f compose.stonevision.yml up -d --build
 чтобы его таймаут не прерывал инференс раньше HTTP-адаптера (180 секунд).
 
 Можно использовать уже запущенный Python-сервис по инструкции
-[StoneVision/RUN_NOTES.md](../StoneVision/RUN_NOTES.md). В отдельном PowerShell:
+[StoneVision/RUN_NOTES.md](../../StoneVision/RUN_NOTES.md). В отдельном PowerShell:
 
 ```powershell
 $env:Segmentation__Backend = 'StoneVision'
