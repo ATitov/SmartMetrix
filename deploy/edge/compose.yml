@@ -104,6 +104,8 @@ services:
       CaptureTrigger__ExcavatorId: ${SMARTMETRIX_EXCAVATOR_ID:?set SMARTMETRIX_EXCAVATOR_ID}
       CaptureTrigger__CoordinateSystemId: ${SMARTMETRIX_COORDINATE_SYSTEM_ID:?set SMARTMETRIX_COORDINATE_SYSTEM_ID}
       CaptureTrigger__ConsumerName: capture-${SMARTMETRIX_RIG_ID}
+      CloudDispatch__Enabled: ${SMARTMETRIX_CLOUD_DISPATCH_ENABLED:-false}
+      CloudDispatch__BaseUrl: http://cloud-sync-service:8080
       Pipeline__RequestTimeoutSeconds: 240
       MeasurementWorkflow__StageTimeoutSeconds: 900
       Pipeline__CalibrationUrl: http://calibration-service:8080
@@ -240,6 +242,9 @@ services:
     image: ${SMARTMETRIX_REGISTRY:-ghcr.io/atitov}/smartmetrix-cloud-sync:${SMARTMETRIX_VERSION:-current}
     build: { <<: *build, args: { SERVICE: SmartMetrix.CloudSyncService } }
     volumes: ["${SMARTMETRIX_DATA_ROOT:-/var/lib/smartmetrix}/cloud-sync:/app/data"]
+    environment:
+      <<: *common-environment
+      CloudSync__StorageBaseUrl: http://storage-service:8080
 
   api-gateway:
     <<: *service

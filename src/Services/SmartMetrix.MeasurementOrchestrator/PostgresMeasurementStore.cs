@@ -8,6 +8,20 @@ namespace SmartMetrix.MeasurementOrchestrator;
 
 public sealed class PostgresMeasurementStore(PostgresDatabase database) : IMeasurementStore
 {
+    public async Task<IReadOnlyList<MeasurementProcess>> GetPendingCloudSyncAsync(CancellationToken cancellationToken = default)
+    {
+        await using var command = database.Source.CreateCommand("""
+            SELECT payload::text FROM measurement.measurements
+            WHERE status = 'Completed' AND payload->>'cloudQueuedAt' IS NULL
+                AND payload->'pipeline'->>'resultUri' IS NOT NULL
+            ORDER BY updated_at, id
+            """);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<MeasurementProcess>();
+        while (await reader.ReadAsync(cancellationToken)) result.Add(Deserialize(reader.GetString(0)));
+        return result;
+    }
+
     public async Task<MeasurementProcess?> GetAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await using var command = database.Source.CreateCommand("SELECT payload::text FROM measurement.measurements WHERE id = $1");

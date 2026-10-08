@@ -135,5 +135,9 @@ dotnet test tests/SmartMetrix.ArchitectureTests/SmartMetrix.ArchitectureTests.cs
 
 Результаты этапов доступны через `GET /measurements/{id}/stages/{stage}` и авторизованный gateway
 `GET /api/operator/measurements/{id}/stages/{stage}`. В деталях панели есть кнопки скачивания JSON.
-Автозапуск по событиям TriggerService и постановка результата в CloudSync здесь не добавляются:
-эта версия связывает ручной запуск с локальным сохранением полного результата.
+Автозапуск подключается через `CaptureTrigger` и durable consumer NATS: проверяются установка,
+экскаватор и срок действия запроса; повтор доставки использует прежние идентификаторы.
+Для автоматической отправки завершённых результатов включите `CloudDispatch__Enabled=true`
+и задайте `CloudDispatch__BaseUrl`. Отдельный фоновый обработчик передаёт результаты в CloudSync,
+не блокируя измерительный цикл. Настройки, повтор после сбоя и состав архива описаны в
+[cloud-sync.md](cloud-sync.md).

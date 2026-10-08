@@ -40,6 +40,26 @@ public sealed class PostgresFactAttribute : FactAttribute
 public sealed partial class PostgresPersistenceTests
 {
     [PostgresFact]
+    public async Task CompletedCloudIntentSurvivesReopenAndAcknowledgementRemovesIt()
+    {
+        await using var fixture = await TestDatabase.CreateAsync();
+        using var database = await fixture.OpenAsync("measurement");
+        var store = new PostgresMeasurementStore(database);
+        var run = Guid.NewGuid();
+        var item = Measurement() with
+        {
+            Status = MeasurementStatus.Completed,
+            Pipeline = new(run, "Services", [], ResultUri: $"s3://test/measurements/{run:D}/pipeline/result.json")
+        };
+        Assert.True(await store.TryCreateAsync(item));
+        using var reopened = await fixture.OpenAsync("measurement");
+        var second = new PostgresMeasurementStore(reopened);
+        Assert.Equal(item.Id, Assert.Single(await second.GetPendingCloudSyncAsync()).Id);
+        Assert.True(await second.TrySaveAsync(item with { Version = item.Version + 1, CloudQueuedAt = DateTimeOffset.UtcNow }, item.Version));
+        Assert.Empty(await store.GetPendingCloudSyncAsync());
+    }
+
+    [PostgresFact]
     public async Task HttpPipelineUsesPostgresAndRecoversCompletedResultAfterRestart()
     {
         await using var fixture = await TestDatabase.CreateAsync();

@@ -35,7 +35,8 @@ public sealed record MeasurementProcess(
     bool IsTestData = false,
     PipelineProgress? Pipeline = null,
     double? D95 = null,
-    IReadOnlyList<PipelineProgress>? PreviousRuns = null);
+    IReadOnlyList<PipelineProgress>? PreviousRuns = null,
+    DateTimeOffset? CloudQueuedAt = null);
 
 public sealed class InvalidMeasurementTransitionException(MeasurementStatus from, MeasurementStatus to)
     : InvalidOperationException($"Transition from {from} to {to} is not allowed.");

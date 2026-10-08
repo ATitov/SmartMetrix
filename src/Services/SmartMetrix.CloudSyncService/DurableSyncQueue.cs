@@ -75,6 +75,19 @@ public sealed class SyncQueueStore : IDisposable
         finally { gate.Release(); }
     }
 
+    public async Task<SyncItem?> FindAsync(Guid measurementId, long version, CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            var id = DeterministicId(measurementId, version);
+            if (database is null) return File.Exists(ItemFile(id)) ? await ReadAsync(ItemFile(id), ct) : null;
+            await using var session = await database.OpenAsync("queue", () => new StoredState([], []), ct);
+            return session.Value.Items.FirstOrDefault(x => x.Id == id);
+        }
+        finally { gate.Release(); }
+    }
+
     public async Task<SyncItem?> GetNextAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         await gate.WaitAsync(cancellationToken);
