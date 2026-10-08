@@ -46,6 +46,7 @@ if (-not $active) {
     $record = Send-Json "$CalibrationUrl/api/calibrations/" @{
         rigId = $rigId; cameras = @($cameras); geometry = @{ abMetres = 0.7; bcMetres = 0.8; acMetres = 1.5 }
         rigToPlatform = @{ rotation = $identity; translation = @(0, 0, 0) }; reprojectionErrorPixels = 0.1
+        accuracy = @{ methodVersion = 'synthetic-test-v1'; confidence = 0.9; rigToPlatformCovariance = @(0..35 | ForEach-Object { if ($_ % 7 -eq 0) { 0.0001 } else { 0.0 } }) }
     }
     $active = Send-Json "$CalibrationUrl/api/calibrations/$($record.id)/activate" @{
         validFrom = [DateTimeOffset]::UtcNow.AddHours(-1).ToString('o'); validTo = $null; actor = 'pipeline-simulator'

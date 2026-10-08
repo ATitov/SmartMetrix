@@ -10,7 +10,7 @@ public sealed record PositioningSample(
     long HardwareTimestampNanoseconds,
     Vector3? PositionMetres,
     Quaternion? Orientation,
-    double[] Covariance);
+    double[] Covariance, string? ClockId = null, string? ProtocolVersion = null);
 
 public sealed record RigidTransform(Vector3 TranslationMetres, Quaternion Rotation);
 
@@ -32,7 +32,7 @@ public sealed record PoseProvenance(
     PositionSourceType SourceType,
     string SourceId,
     long BeforeTimestampNanoseconds,
-    long AfterTimestampNanoseconds);
+    long AfterTimestampNanoseconds, string? ClockId = null, string? ProtocolVersion = null);
 
 public sealed record LocalizedPose(
     string CoordinateSystemId,

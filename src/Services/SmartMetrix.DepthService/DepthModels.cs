@@ -66,6 +66,12 @@ public sealed class DepthOptions
     public double FarDistanceMetres { get; set; } = 20.0;
     public string StorageBaseUrl { get; set; } = "http://storage-service:8080";
     public string CalibrationDirectory { get; set; } = "";
+    public bool IsValid() => Backend is "Cpu" or "Native" && NativeProvider == "OpenCvCuda" &&
+        MinimumDisparity >= 0 && MaximumDisparity > MinimumDisparity && MaximumDisparity <= 4096 &&
+        (Backend != "Native" || MaximumDisparity - MinimumDisparity + 1 <= 256) && MatchRadius is >= 1 and <= 20 &&
+        float.IsFinite(LeftRightTolerancePixels) && LeftRightTolerancePixels > 0 && MinimumSpeckleSize >= 0 &&
+        float.IsFinite(MinimumConfidence) && MinimumConfidence is >= 0 and <= 1 && UniquenessRatio is >= 0 and <= 100 &&
+        double.IsFinite(NearDistanceMetres) && double.IsFinite(FarDistanceMetres) && NearDistanceMetres > 0 && FarDistanceMetres > NearDistanceMetres;
 }
 
 public sealed class StereoBackendNotConfiguredException(string message) : InvalidOperationException(message);

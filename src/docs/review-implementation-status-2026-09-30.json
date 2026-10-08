@@ -1,0 +1,131 @@
+{
+  "date": "2026-09-30",
+  "scope": "codex/review-remediation; reviewed software changes and isolated local infrastructure; no production deployment",
+  "githubIssuesCreated": false,
+  "checks": {
+    "lockedRestore": "passed",
+    "releaseBuild": "passed, zero warnings/errors",
+    "dotnetTests": {
+      "passed": 284,
+      "skipped": 0,
+      "failed": 0,
+      "infrastructure": "PostgreSQL 18, NATS 2.11.0 JetStream, MinIO RELEASE.2025-07-23T15-54-02Z; actual local services"
+    },
+    "browserTests": {
+      "passed": 46,
+      "failed": 0,
+      "workingPageTests": 4,
+      "prototypeTests": 42
+    },
+    "format": "passed",
+    "nativeCompilation": "not run: toolchain, SDK and target hardware unavailable",
+    "composeRuntimeValidation": "not run: Docker unavailable",
+    "gitDiffCheck": "passed",
+    "consumerRestartAndRedelivery": "passed with real NATS; saved measurement recovered and replay did not duplicate it",
+    "measurementSnapshotConcurrency": "reader/writer synchronization and stress test added after intermittent Windows replacement failure"
+  },
+  "tasks": [
+    {
+      "number": 1,
+      "title": "[P1] GUI: перейти на API с областями доступа",
+      "status": "software_complete",
+      "remainingAcceptance": []
+    },
+    {
+      "number": 2,
+      "title": "[P1] Инженерные настройки: применять конфигурацию к сервисам",
+      "status": "software_complete",
+      "remainingAcceptance": [
+        "Arena exposure and rollback on the actual device"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "[P1] Калибровка: заменить идеальные оценки по умолчанию реальными",
+      "status": "software_complete",
+      "remainingAcceptance": [
+        "Measured calibration accuracy and a new calibration version"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "[P1] BlockAnalysis: проверить и исправить модель размеров и объёма",
+      "status": "partial_external_inputs_required",
+      "remainingAcceptance": [
+        "Ground-truth dimensional/volume validation; full physical volume is not reconstructed"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "[P1] Trigger → Orchestrator: подключить автоматический запуск",
+      "status": "software_complete",
+      "remainingAcceptance": [
+        "JetStream restart/redelivery test on actual infrastructure"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "[P2] Геопривязка: передавать реальные границы блоков",
+      "status": "software_complete",
+      "remainingAcceptance": []
+    },
+    {
+      "number": 7,
+      "title": "[P2] QualityService: сохранять результаты после перезапуска",
+      "status": "software_complete",
+      "remainingAcceptance": []
+    },
+    {
+      "number": 8,
+      "title": "[P1] Тестовые backend: отделить симуляцию от производственного профиля",
+      "status": "software_complete",
+      "remainingAcceptance": []
+    },
+    {
+      "number": 9,
+      "title": "[P1] QualityService: валидировать модель загрязнения и числовые эвристики",
+      "status": "partial_external_inputs_required",
+      "remainingAcceptance": [
+        "Labeled quality dataset and field validation"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "[P2] BlockAnalysis: вынести пороги качества и классы размеров в профиль",
+      "status": "software_complete",
+      "remainingAcceptance": []
+    },
+    {
+      "number": 11,
+      "title": "[P1] Native Arena/CUDA: подтвердить рабочие сборки вместо диагностических стабов",
+      "status": "partial_external_inputs_required",
+      "remainingAcceptance": [
+        "Compile native libraries with SDKs; real cameras/CUDA and load acceptance"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "[P1] CUDA stereo: проверить обратную disparity и left-right consistency",
+      "status": "partial_external_inputs_required",
+      "remainingAcceptance": [
+        "Compile and execute CUDA CTest; CPU comparison and benchmark"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "[P1] Позиционирование: реализовать аппаратные источники образцов позы",
+      "status": "partial_external_inputs_required",
+      "remainingAcceptance": [
+        "Vendor device protocols and bridge clock synchronization; physical acceptance"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "[P1] Сегментация: реализовать распознавание трещин и приёмку",
+      "status": "partial_external_inputs_required",
+      "remainingAcceptance": [
+        "Actual crack model server, weights and labeled dataset; model acceptance"
+      ]
+    }
+  ]
+}

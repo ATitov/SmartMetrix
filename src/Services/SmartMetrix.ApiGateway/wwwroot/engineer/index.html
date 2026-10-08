@@ -10,7 +10,7 @@
 <div class="shell">
   <aside class="rail">
     <div class="brand"><div class="mark">SM</div><div><b>SmartMetrix</b><small>Edge measurement</small></div></div>
-    <nav><a href="/operator/">Оператор</a><a class="active" href="/engineer/">Инженер</a></nav>
+    <nav><a href="/operator/">Оператор</a><a class="active" href="/engineer/">Инженер</a><a href="/excavation/">Работа экскаватора</a></nav>
     <div class="rail-footer muted">Диагностика и аудит</div>
   </aside>
   <main class="workspace">
@@ -18,6 +18,7 @@
       <div><div class="eyebrow">ИНЖЕНЕРНЫЙ КОНТУР</div><h1>Диагностика системы</h1><div id="freshness" class="freshness">Ожидание данных</div></div>
       <div class="controls"><input id="apiKey" type="hidden"><span id="currentUser" class="muted"></span><button class="button" id="logout">Выйти</button><button class="button" id="exportDiagnostics">Скачать снимок</button><button class="button" id="refresh">Обновить</button></div>
     </header>
+    <label>Область измерений <select id="scopeSelector" hidden aria-label="Область измерений"></select></label>
     <div id="error" class="card error" role="alert" hidden></div>
     <section class="hero">
       <article class="card" id="systemState"><div class="muted">Загрузка состояния…</div></article>

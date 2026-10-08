@@ -13,7 +13,8 @@ public sealed record CalibrationPayload(
     RigGeometry Geometry,
     RigPose RigToPlatform,
     double ReprojectionErrorPixels,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SmartMetrix.Contracts.StereoRectification? Rectification = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SmartMetrix.Contracts.StereoRectification? Rectification = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SmartMetrix.Contracts.CalibrationAccuracy? Accuracy = null);
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CalibrationStatus { Draft, Active, Revoked }

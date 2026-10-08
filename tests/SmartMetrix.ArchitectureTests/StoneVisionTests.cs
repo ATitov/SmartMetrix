@@ -8,9 +8,46 @@ namespace SmartMetrix.ArchitectureTests;
 
 public sealed class StoneVisionTests
 {
+    private static readonly JsonSerializerOptions CrackJson = new(JsonSerializerDefaults.Web);
     private static readonly int[] MaskSize = [2, 3];
     private static readonly int[] ExpectedLabels = [1, 0, 1, 0, 1, 0];
     private static readonly int[] ExpectedRuns = [0, 1, 2, 2, 1];
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CrackInferenceMergesValidatedPixelsOrRejectsDifferentGrid(bool wrongGrid)
+    {
+        var store = new Store();
+        var options = Options.Create(new SegmentationOptions
+        {
+            ModelVersion = "stonevision-test",
+            CrackBaseUrl = "http://cracks/",
+            CrackModelVersion = "cracks-v1",
+            CrackWeightsSha256 = new string('a', 64)
+        });
+        var frame = Frame();
+        var prediction = new CrackPrediction(1, 3, 2, "A", wrongGrid ? "OtherGrid" : "CameraAOriginal",
+            [1, 0, 0, 0, 0, 0], [230, 0, 0, 0, 0, 0], "cracks-v1", new string('a', 64));
+        using var stoneHttp = new HttpClient(new Handler(Response([0, 1, 2, 2, 1]))) { BaseAddress = new("http://stonevision/") };
+        using var crackHttp = new HttpClient(new Handler(JsonSerializer.Serialize(prediction, CrackJson))) { BaseAddress = new("http://cracks/") };
+        var processor = new StoneVisionProcessor(new(stoneHttp), store, options, new(crackHttp, options));
+        if (wrongGrid)
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => processor.ProcessAsync(Guid.NewGuid(), frame, default));
+            Assert.Empty(store.Items);
+            return;
+        }
+        var result = await processor.ProcessAsync(Guid.NewGuid(), frame, default);
+        Assert.Equal(1, result.ClassPixelCounts["Crack"]);
+        Assert.Equal(2, result.ClassPixelCounts["Rock"]);
+        Assert.Equal(new byte[] { 2, 0, 1, 0, 1, 0 }, Pixels(store.Items["segmentation/mask.pgm"]));
+        Assert.Equal("cracks-v1", result.Cracks!.ModelVersion);
+        Assert.Equal(new string('a', 64), result.Cracks.WeightsSha256);
+        var labels = JsonSerializer.Deserialize<JsonElement>(store.Items["segmentation/instances.json"]).GetProperty("labels");
+        Assert.Equal(0, labels[0].GetInt32());
+        Assert.Equal(1, labels[2].GetInt32());
+        Assert.Contains("segmentation/cracks.json", store.Items.Keys);
+    }
     [Fact]
     public async Task ConvertsColumnMajorMasksAndPreservesOriginalResponse()
     {

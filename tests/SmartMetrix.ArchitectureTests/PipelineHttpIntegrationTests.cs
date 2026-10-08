@@ -23,6 +23,19 @@ public sealed class PipelineHttpIntegrationTests
 {
     private static readonly int[] ExpectedInstanceIds = [1, 2];
     [Fact]
+    public async Task MissingCalibrationAccuracyFailsWithoutInventingConfidence()
+    {
+        await using var rig = new PipelineTestRig();
+        await rig.StartAsync();
+        await rig.ConfigureRigAsync(accuracy: false);
+        var measurement = await rig.PostAsync<MeasurementProcess>("orchestrator", "measurements",
+            new StartMeasurementRequest(Guid.NewGuid(), null, "EX-TEST", "quarry:test", "Unknown accuracy"));
+        var result = await rig.WaitForTerminalAsync(measurement.Id);
+        Assert.Equal(MeasurementStatus.Failed, result.Status);
+        Assert.Equal("CalibrationAccuracyUnknown", result.Pipeline!.ErrorCode);
+        Assert.Null(result.D50);
+    }
+    [Fact]
     public async Task StoneVisionBackendCompletesTheHttpPipeline()
     {
         await using var rig = new PipelineTestRig { UseStoneVision = true };
@@ -75,7 +88,7 @@ public sealed class PipelineHttpIntegrationTests
         Assert.Equal("CameraAOriginal", depth.GetProperty("pixelGrid").GetString());
         Assert.Equal(3, depth.GetProperty("rectificationChecksums").EnumerateObject().Count());
         Assert.True(depth.GetProperty("selectedBaselines").GetProperty("BC").GetInt32() > 0);
-        Assert.True(result.D50 > 0);
+        Assert.Null(result.D50); // This synthetic scene is a planar visible surface, without a volume estimate.
         Assert.True(result.BlockCount > 0);
     }
 
@@ -94,19 +107,22 @@ public sealed class PipelineHttpIntegrationTests
         Assert.Equal(first.Id, duplicate.Id);
         var completed = await rig.WaitForTerminalAsync(first.Id);
         Assert.True(completed.Status == MeasurementStatus.Completed, JsonSerializer.Serialize(completed, PipelineJson.Options) + rig.Logs);
-        Assert.True(completed.D50 > 0);
+        Assert.Null(completed.D50); // No invented thickness/volume for the planar fixture.
         Assert.True(completed.BlockCount > 0);
         Assert.True(completed.IsTestData);
         Assert.Null(completed.D20);
         Assert.Null(completed.D90);
-        Assert.NotNull(completed.D95);
+        Assert.Null(completed.D95);
         Assert.Equal(9, completed.Pipeline!.Stages.Count);
         Assert.Equal(2, completed.Pipeline.Stages.Single(x => x.Name == "quality").Attempts);
         Assert.NotNull(completed.Pipeline.ResultUri);
         Assert.Contains(completed.Transitions, x => x.To == MeasurementStatus.Segmenting);
         Assert.Contains(completed.Transitions, x => x.To == MeasurementStatus.Persisting);
         var manifest = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{first.Id}/stages/result");
-        Assert.Equal(completed.D50, manifest.GetProperty("analysis").GetProperty("d50Millimetres").GetDouble());
+        Assert.Equal(JsonValueKind.Null, manifest.GetProperty("analysis").GetProperty("d50Millimetres").ValueKind);
+        Assert.False(manifest.GetProperty("analysis").GetProperty("volumeDistributionAvailable").GetBoolean());
+        Assert.NotEmpty(manifest.GetProperty("georeference").GetProperty("blocks")[0].GetProperty("boundary").EnumerateArray());
+        Assert.Equal("visible-surface-samples", manifest.GetProperty("georeference").GetProperty("blocks")[0].GetProperty("boundaryKind").GetString());
         var local = manifest.GetProperty("analysis").GetProperty("blocks").EnumerateArray().First(x => x.GetProperty("isValid").GetBoolean()).GetProperty("centre");
         var geo = manifest.GetProperty("georeference").GetProperty("blocks")[0].GetProperty("centre");
         Assert.InRange(geo.GetProperty("xMetres").GetDouble() - local.GetProperty("xMetres").GetDouble(), 10.99, 11.01);
@@ -354,12 +370,13 @@ internal sealed class PipelineTestRig : IAsyncDisposable
         _processes.Add(process);
     }
 
-    public async Task ConfigureRigAsync(bool rectification = false)
+    public async Task ConfigureRigAsync(bool rectification = false, bool accuracy = true)
     {
         double[] identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];
         var payload = new CalibrationPayload("rig-test", CameraIds.Select(id => new CameraCalibration(id,
             new(80, 80, 64, 32, 128, 64), [0, 0, 0, 0, 0], identity, [0, 0, 0], "s3://calibration/identity")).ToArray(),
-            new(.7, .8, 1.5), new(identity, [0, 0, 0]), .1);
+            new(.7, .8, 1.5), new(identity, [0, 0, 0]), .1,
+            Accuracy: accuracy ? new("synthetic-test-v1", .9, Enumerable.Range(0, 36).Select(i => i % 7 == 0 ? .0001 : 0d).ToArray()) : null);
         if (rectification)
         {
             var root = Path.Combine(_directory, "calibration-maps");

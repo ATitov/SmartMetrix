@@ -22,7 +22,7 @@
 | SYS-03 | Контракты имеют версию; большие артефакты передаются по URI с checksum; несовместимая схема отвергается. | ContractTests. |
 | SYS-04 | Отмена, таймаут, повтор команды и перезапуск не создают второй подтверждённый результат. | MeasurementStateMachineTests, PipelineHttpIntegrationTests, CloudSyncTests; разрыв: полный цикл через брокер. |
 | SYS-05 | Симулятор включается явно; отсутствие аппаратного backend не заменяется синтетическим измерением. | CameraCaptureTests, DepthReconstructionTests, StoneVisionTests. |
-| SYS-06 | Сохраняемые реестры, очереди и результаты переживают перезапуск и восстановление из backup. | Разрыв: реестры Calibration/ControlPoint хранят состояние в памяти; необходима реализация и проверка восстановления. |
+| SYS-06 | Сохраняемые реестры, очереди и результаты переживают перезапуск и восстановление из backup. | PostgreSQL persistence и PostgresPersistenceTests реализованы; режим без PostgreSQL не даёт долговечности реестров. Полный restore из backup требует отдельной приёмки. |
 
 ## TriggerService
 
@@ -45,7 +45,7 @@
 | ORC-01 | Только допустимые переходы состояния; Completed терминален; commandId идемпотентен; несовпадающая expectedVersion отклоняется. | MeasurementStateMachineTests, PipelineHttpIntegrationTests. |
 | ORC-02 | Этапы выполняются в установленном порядке; отклонённое качество не допускает реконструкции; ссылки и provenance доходят до итогового результата. | PipelineHttpIntegrationTests. |
 | ORC-03 | После restart используются checkpoint; число повторов ограничено; cancel не отменяется поздним ответом зависимости. | PipelineHttpIntegrationTests. |
-| ORC-04 | Completed надёжно ставится в CloudSync без зависимости успеха измерения от доступности облака. | Разрыв: сквозная передача и восстановление после сбоя. |
+| ORC-04 | Completed надёжно ставится в CloudSync без зависимости успеха измерения от доступности облака. | CloudDispatchTests: импорт артефактов, потеря подтверждения и restart без дублей; целевой облачный приёмник требует отдельной приёмки. |
 
 ## CameraService
 

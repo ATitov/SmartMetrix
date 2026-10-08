@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Build)
+param([switch]$Build, [switch]$TestMode)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'process-state.ps1')
@@ -33,7 +33,7 @@ $toolRoot = Join-Path $deploymentRoot 'infrastructure'
 $natsExecutable = Get-ChildItem -LiteralPath $toolRoot -Recurse -Filter 'nats-server.exe' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
 $minioExecutable = Join-Path $toolRoot 'minio.exe'
 if (-not $natsExecutable -or -not (Test-Path $minioExecutable)) {
-    throw 'NATS/MinIO binaries are missing. Install the local infrastructure binaries first; see docs/local-deployment.md.'
+    throw 'NATS/MinIO binaries are missing. Install the local infrastructure binaries first; see src/docs/local-deployment.md.'
 }
 
 $infrastructure = @(
@@ -116,17 +116,20 @@ foreach ($service in $configuration.Services) {
         }
     }
     if ($service.Name -eq 'camera') {
-        $environment['Camera__Adapter'] = 'Simulator'
+        $environment['Camera__Adapter'] = if ($TestMode) { 'Simulator' } else { 'Arena' }
         $environment['Camera__StorageServiceUrl'] = 'http://127.0.0.1:5105'
     }
     if ($service.Name -eq 'orchestrator') {
-        $demoEnabled = [Environment]::GetEnvironmentVariable('MeasurementWorkflow__RunDemoPipeline', 'Process') -eq 'true'
+        $demoEnabled = $TestMode -and [Environment]::GetEnvironmentVariable('MeasurementWorkflow__RunDemoPipeline', 'Process') -eq 'true'
         $environment['MeasurementWorkflow__SeedDemoData'] = $demoEnabled.ToString().ToLowerInvariant()
         $environment['MeasurementWorkflow__RunDemoPipeline'] = $demoEnabled.ToString().ToLowerInvariant()
         $environment['MeasurementWorkflow__DemoStageDelaySeconds'] = '4'
     }
     if ($service.Name -eq 'depth') { $environment['Depth__StorageBaseUrl'] = 'http://127.0.0.1:5105' }
-    if ($service.Name -eq 'segmentation') { $environment['Segmentation__StorageBaseUrl'] = 'http://127.0.0.1:5105' }
+    if ($service.Name -eq 'segmentation') {
+        $environment['Segmentation__StorageBaseUrl'] = 'http://127.0.0.1:5105'
+        $environment['Segmentation__Backend'] = if ($TestMode) { 'Deterministic' } else { 'StoneVision' }
+    }
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = (Get-Command dotnet).Source

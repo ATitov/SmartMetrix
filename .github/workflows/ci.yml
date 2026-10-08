@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/stonevision-integration
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -66,13 +67,14 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - run: dotnet build tools/SmartMetrix.DepthComparison/SmartMetrix.DepthComparison.csproj -c Release --locked-mode
+      - run: dotnet restore tools/SmartMetrix.DepthComparison/SmartMetrix.DepthComparison.csproj --locked-mode
+      - run: dotnet build tools/SmartMetrix.DepthComparison/SmartMetrix.DepthComparison.csproj -c Release --no-restore
       - run: python -m unittest discover -s tools/camera-calibration -p 'test_*.py' -v
 
   verify:
     name: Restore, format, build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Check out repository
@@ -94,9 +96,13 @@ jobs:
       - name: Build
         run: dotnet build SmartMetrix.sln --no-restore --configuration Release
 
+      - name: Build test MinIO from pinned upstream source
+        run: docker build -t smartmetrix-minio-test:2025-07-23 -f tests/infrastructure/minio.Dockerfile .
+
       - name: Run tests
         env:
           SMARTMETRIX_RUN_INTEGRATION_TESTS: 'true'
+          SMARTMETRIX_TEST_MINIO_IMAGE: smartmetrix-minio-test:2025-07-23
         run: dotnet test SmartMetrix.sln --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
 
       - name: Upload test results

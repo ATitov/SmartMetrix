@@ -29,12 +29,16 @@ public sealed record SegmentationResult(
     public Uri? InstanceMapUri { get; init; }
     public Uri? RawResultUri { get; init; }
     public IReadOnlyList<SegmentationWarning> Warnings { get; init; } = [];
+    public CrackInferenceProvenance? Cracks { get; init; }
 }
 
 public sealed class SegmentationOptions
 {
     public const string SectionName = "Segmentation";
     public string Backend { get; set; } = "Deterministic";
+    public string? CrackBaseUrl { get; set; }
+    public string? CrackModelVersion { get; set; }
+    public string? CrackWeightsSha256 { get; set; }
     public string StoneVisionBaseUrl { get; set; } = "http://127.0.0.1:5000";
     public int StoneVisionTimeoutSeconds { get; set; } = 180;
     public string? StoneVisionVersion { get; set; }

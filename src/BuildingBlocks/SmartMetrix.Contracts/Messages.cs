@@ -7,7 +7,9 @@ public sealed record CaptureRequested(
     string Reason,
     DateTimeOffset RequestedAt,
     CaptureDecisionInputs? Inputs = null,
-    DateTimeOffset? ExpiresAt = null) : IExpiringEvent;
+    DateTimeOffset? ExpiresAt = null,
+    string? RigId = null,
+    string? ExcavatorId = null) : IExpiringEvent;
 
 public sealed record CaptureDecisionInputs(
     double CanSpeedMetresPerSecond,

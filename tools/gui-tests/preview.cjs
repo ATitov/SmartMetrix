@@ -1,7 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const root = path.resolve(__dirname, '../../docs/gui-prototype');
+const root = path.resolve(__dirname, '../../src/docs/gui-prototype');
 http.createServer(async (req, res) => {
   const file = {'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js'}[new URL(req.url,'http://localhost').pathname];
   if (!file) { res.writeHead(404).end(); return; }

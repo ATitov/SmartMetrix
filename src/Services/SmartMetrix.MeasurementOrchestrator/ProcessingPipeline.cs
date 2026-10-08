@@ -144,6 +144,7 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
         var segmentation = await Load("segmentation");
         if (stage == "analysis")
         {
+            var accuracy = Accuracy(payload);
             if (hasRectification && (!depth.TryGetProperty("pixelGrid", out var pixelGrid) || pixelGrid.GetString() != "CameraAOriginal"))
                 throw new PipelineException("PixelGridMismatch", "Rectified depth must be reprojected to the original camera A grid before block analysis.");
             var organized = JsonSerializer.Deserialize<JsonElement>(await transport.DownloadAsync(run, Text(depth, "organizedCloudUri"), id, ct));
@@ -170,7 +171,8 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 mask = mask.Select(x => (int)x).ToArray(),
                 segmentationConfidence = confidence.Select(x => x / 255f).ToArray(),
                 instanceLabels,
-                settings.CalibrationConfidence,
+                cracksSupported = segmentation.TryGetProperty("cracks", out var crackProvenance) && crackProvenance.ValueKind == JsonValueKind.Object,
+                calibrationConfidence = accuracy.Confidence,
                 coordinateSystemId = settings.CameraRigCoordinateSystemId,
                 artifacts = new
                 {
@@ -187,6 +189,7 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
         var poseResult = await Load("pose");
         if (stage == "georeference")
         {
+            var accuracy = Accuracy(payload);
             var cloud = JsonSerializer.Deserialize<JsonElement>(await transport.DownloadAsync(run, Text(depth, "organizedCloudUri"), id, ct));
             var rigPose = payload.GetProperty("rigToPlatform");
             var translation = rigPose.GetProperty("translation").EnumerateArray().Select(x => x.GetSingle()).ToArray();
@@ -206,13 +209,14 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
                 {
                     blockId = x.GetProperty("blockId"),
                     centre = x.GetProperty("centre"),
-                    boundary = Array.Empty<object>(),
+                    boundary = x.GetProperty("boundary"),
+                    boundaryKind = x.GetProperty("boundaryKind").GetString(),
                     equivalentDiameterMillimetres = x.GetProperty("geometry").GetProperty("equivalentDiameterMillimetres"),
                     confidence = x.GetProperty("confidence")
                 }),
                 staticTransforms = new[] { new { fromCoordinateSystemId = settings.CameraRigCoordinateSystemId,
                     toCoordinateSystemId = settings.PlatformCoordinateSystemId, version = calibrationId + ":" + calibration.GetProperty("version").GetInt32(),
-                    transform = new { translationMetres = new Vector3(translation[0], translation[1], translation[2]), rotation = quaternion }, covariance = settings.StaticTransformCovariance } },
+                    transform = new { translationMetres = new Vector3(translation[0], translation[1], translation[2]), rotation = quaternion }, covariance = accuracy.RigToPlatformCovariance } },
                 exposurePose = new
                 {
                     hardwareTimestampNanoseconds = timestamp,
@@ -235,9 +239,10 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
             calibrationId,
             calibrationVersion = calibration.GetProperty("version"),
             calibrationChecksum = calibration.GetProperty("checksum"),
+            calibrationAccuracy = payload.GetProperty("accuracy"),
             modelVersion = segmentation.GetProperty("event").GetProperty("modelVersion"),
             transformVersion = poseResult.GetProperty("transformVersion"),
-            isTestData = Text(captureResponse, "adapter") == "Simulator" || !segmentation.TryGetProperty("isTestData", out var test) || test.GetBoolean(),
+            isTestData = MeasurementDataProvenance.IsTestData(captureResponse, segmentation),
             analysis,
             georeference = await Load("georeference"),
             stages = process.Pipeline.Stages
@@ -247,6 +252,16 @@ public sealed class ProcessingPipeline(PipelineTransport transport, IOptions<Pip
 
     public static string Text(JsonElement value, string name) => value.GetProperty(name).GetString()
         ?? throw new PipelineException("InvalidServiceResponse", $"Missing {name}.");
+
+    private static SmartMetrix.Contracts.CalibrationAccuracy Accuracy(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("accuracy", out var value) || value.ValueKind != JsonValueKind.Object)
+            throw new PipelineException("CalibrationAccuracyUnknown", "The calibration version has no accuracy assessment.");
+        var accuracy = value.Deserialize<SmartMetrix.Contracts.CalibrationAccuracy>(PipelineJson.Options)
+            ?? throw new PipelineException("CalibrationAccuracyUnknown", "Calibration accuracy is missing.");
+        accuracy.Validate();
+        return accuracy;
+    }
 
     public static byte[] ReadPgm(byte[] bytes, int width, int height, int maximum)
     {

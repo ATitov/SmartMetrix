@@ -13,7 +13,10 @@ public sealed class CloudSyncOptions
     [Range(1, 3600)] public int PollIntervalSeconds { get; set; } = 5;
     [Range(1, 86400)] public int MaxBackoffSeconds { get; set; } = 300;
     public bool DeleteArtifactsAfterAcknowledgement { get; set; } = true;
+    [Required, Url] public string StorageBaseUrl { get; set; } = "http://127.0.0.1:5105";
 }
+
+public sealed record EnqueueMeasurementRequest(Guid MeasurementId, long Version, Guid RunId, string ResultUri);
 
 public enum SyncPriority { RawFrame = 0, Result = 100 }
 public enum SyncState { Pending, Uploading, Retry, Completed, Conflict }

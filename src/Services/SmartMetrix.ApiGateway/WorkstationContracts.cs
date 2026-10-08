@@ -25,6 +25,9 @@ public sealed class WorkstationScope
 
 public static class WorkstationIdentity
 {
+    public static bool ResourceIdentifier(string? value) => value is not null &&
+        Regex.IsMatch(value, "^[\\p{L}\\p{N}][\\p{L}\\p{N}_.:-]{0,127}$", RegexOptions.CultureInvariant);
+
     public const string ScopeClaim = "smartmetrix:scope";
     public static bool Identifier(string? value) => value is not null &&
         Regex.IsMatch(value, "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$", RegexOptions.CultureInvariant);

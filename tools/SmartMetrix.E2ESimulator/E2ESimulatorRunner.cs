@@ -53,9 +53,11 @@ public sealed class E2ESimulatorRunner
 
         var analysisTimer = Stopwatch.StartNew();
         var analysis = Analyze(measurementId, dataset, points, segmentation);
+        var d50 = analysis.D50Millimetres ?? throw new InvalidOperationException("Synthetic acceptance fixture has no volume distribution.");
+        var d80 = analysis.D80Millimetres ?? throw new InvalidOperationException("Synthetic acceptance fixture has no volume distribution.");
         analysisTimer.Stop();
         stages.Add(new("analysis", analysis.Provenance.Version, analysisTimer.Elapsed.TotalMilliseconds,
-            new Dictionary<string, double> { ["d50Mm"] = analysis.D50Millimetres, ["d80Mm"] = analysis.D80Millimetres, ["blocks"] = analysis.Blocks.Count }, []));
+            new Dictionary<string, double> { ["d50Mm"] = d50, ["d80Mm"] = d80, ["blocks"] = analysis.Blocks.Count }, []));
 
         var geoTimer = Stopwatch.StartNew();
         var georeferenced = Georeference(measurementId, dataset, analysis);
@@ -66,8 +68,8 @@ public sealed class E2ESimulatorRunner
             new Dictionary<string, double> { ["coordinateErrorMetres"] = coordinateError, ["blocks"] = georeferenced.Blocks.Count }, []));
 
         total.Stop();
-        var d50Error = RelativeError(analysis.D50Millimetres, dataset.ExpectedD50Millimetres);
-        var d80Error = RelativeError(analysis.D80Millimetres, dataset.ExpectedD80Millimetres);
+        var d50Error = RelativeError(d50, dataset.ExpectedD50Millimetres);
+        var d80Error = RelativeError(d80, dataset.ExpectedD80Millimetres);
         var rejected = quality.Accepted ? 0d : 1d;
         var checks = new Dictionary<string, bool>
         {
@@ -80,7 +82,7 @@ public sealed class E2ESimulatorRunner
         };
         var report = new E2EReport(measurementId, dataset.DatasetVersion, dataset.ModelVersion,
             dataset.CalibrationVersion, dataset.TransformVersion, DateTimeOffset.UtcNow,
-            analysis.D50Millimetres, analysis.D80Millimetres, d50Error, d80Error, coordinateError,
+            d50, d80, d50Error, d80Error, coordinateError,
             rejected, total.Elapsed.TotalMilliseconds, stages, checks, checks.Values.All(x => x));
         await WriteJson(Path.Combine(outputDirectory, "report.json"), report, cancellationToken);
         return report;
@@ -108,7 +110,7 @@ public sealed class E2ESimulatorRunner
     {
         var options = new QualityOptions { DefaultSceneType = "pilot" };
         options.Scenes["pilot"] = new QualityThresholds { Version = $"quality-{dataset.DatasetVersion}", MinimumSharpness = 0.01, MinimumTexture = 0.05, MaximumLensContamination = 0.8 };
-        return await new QualityAnalyzer(new InMemoryOptionsMonitor<QualityOptions>(options), new HeuristicLensContaminationModel(), new InMemoryQualityResultStore())
+        return await new QualityAnalyzer(new InMemoryOptionsMonitor<QualityOptions>(options), new HeuristicLensContaminationModel(new InMemoryOptionsMonitor<QualityOptions>(options)), new InMemoryQualityResultStore())
             .AssessAsync(id, new QualityRequest("pilot", frames), token);
     }
 

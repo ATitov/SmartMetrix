@@ -40,6 +40,26 @@ public sealed class PostgresFactAttribute : FactAttribute
 public sealed partial class PostgresPersistenceTests
 {
     [PostgresFact]
+    public async Task CompletedCloudIntentSurvivesReopenAndAcknowledgementRemovesIt()
+    {
+        await using var fixture = await TestDatabase.CreateAsync();
+        using var database = await fixture.OpenAsync("measurement");
+        var store = new PostgresMeasurementStore(database);
+        var run = Guid.NewGuid();
+        var item = Measurement() with
+        {
+            Status = MeasurementStatus.Completed,
+            Pipeline = new(run, "Services", [], ResultUri: $"s3://test/measurements/{run:D}/pipeline/result.json")
+        };
+        Assert.True(await store.TryCreateAsync(item));
+        using var reopened = await fixture.OpenAsync("measurement");
+        var second = new PostgresMeasurementStore(reopened);
+        Assert.Equal(item.Id, Assert.Single(await second.GetPendingCloudSyncAsync()).Id);
+        Assert.True(await second.TrySaveAsync(item with { Version = item.Version + 1, CloudQueuedAt = DateTimeOffset.UtcNow }, item.Version));
+        Assert.Empty(await store.GetPendingCloudSyncAsync());
+    }
+
+    [PostgresFact]
     public async Task HttpPipelineUsesPostgresAndRecoversCompletedResultAfterRestart()
     {
         await using var fixture = await TestDatabase.CreateAsync();
@@ -50,7 +70,7 @@ public sealed partial class PostgresPersistenceTests
         var started = await rig.PostAsync<MeasurementProcess>("orchestrator", "measurements", request);
         var completed = await rig.WaitForTerminalAsync(started.Id);
         Assert.True(completed.Status == MeasurementStatus.Completed, completed.FailureReason + rig.Logs);
-        Assert.True(completed.D50 > 0);
+        Assert.Null(completed.D50); // The synthetic scene is planar; no volume distribution is available.
         using var db = await fixture.OpenAsync("measurement");
         await using var count = db.Source.CreateCommand("SELECT count(*) FROM measurement.stages");
         Assert.Equal(9L, await count.ExecuteScalarAsync());
@@ -59,7 +79,8 @@ public sealed partial class PostgresPersistenceTests
         Assert.Equal(completed.Version, restored.Version);
         Assert.Equal(completed.D50, restored.D50);
         var result = await rig.GetAsync<JsonElement>("orchestrator", $"measurements/{started.Id}/stages/result");
-        Assert.Equal(completed.D50, result.GetProperty("analysis").GetProperty("d50Millimetres").GetDouble());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("analysis").GetProperty("d50Millimetres").ValueKind);
+        Assert.False(result.GetProperty("analysis").GetProperty("volumeDistributionAvailable").GetBoolean());
     }
 
     [PostgresFact]
@@ -370,7 +391,8 @@ public sealed partial class PostgresPersistenceTests
                 container = new ContainerBuilder("postgis/postgis:17-3.5-alpine")
                     .WithEnvironment("POSTGRES_PASSWORD", "integration-only-password")
                     .WithPortBinding(5432, true)
-                    .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("pg_isready", "-U", "postgres"))
+                    // The initdb server accepts Unix-socket connections before the final TCP server starts.
+                    .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(5432))
                     .Build();
                 await container.StartAsync();
                 admin = $"Host={container.Hostname};Port={container.GetMappedPublicPort(5432)};Username=postgres;Password=integration-only-password;Database=postgres";

@@ -5,6 +5,7 @@ namespace SmartMetrix.MeasurementOrchestrator;
 
 public interface IMeasurementStore
 {
+    Task<IReadOnlyList<MeasurementProcess>> GetPendingCloudSyncAsync(CancellationToken cancellationToken = default);
     Task<MeasurementProcess?> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MeasurementProcess>> GetRecentAsync(int limit, bool activeOnly, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MeasurementProcess>> GetUnfinishedAsync(CancellationToken cancellationToken = default);
@@ -14,11 +15,32 @@ public interface IMeasurementStore
 
 public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasurementStore
 {
+    public async Task<IReadOnlyList<MeasurementProcess>> GetPendingCloudSyncAsync(CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(_directory);
+        var result = new List<MeasurementProcess>();
+        foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
+        {
+            if (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(path), "N", out var id)) continue;
+            var item = await GetAsync(id, cancellationToken);
+            if (item is { Status: SmartMetrix.Domain.MeasurementStatus.Completed, CloudQueuedAt: null, Pipeline.ResultUri: not null }) result.Add(item);
+        }
+        return result.OrderBy(x => x.UpdatedAt).ToArray();
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private readonly string _directory = Path.Combine(environment.ContentRootPath, "data", "measurements");
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _locks = new();
 
     public async Task<MeasurementProcess?> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var gate = _locks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try { return await ReadAsync(id, cancellationToken); }
+        finally { gate.Release(); }
+    }
+
+    private async Task<MeasurementProcess?> ReadAsync(Guid id, CancellationToken cancellationToken)
     {
         var path = PathFor(id);
         if (!File.Exists(path)) return null;
@@ -32,8 +54,8 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
         var result = new List<MeasurementProcess>();
         foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
         {
-            await using var stream = OpenSnapshot(path);
-            var item = await JsonSerializer.DeserializeAsync<MeasurementProcess>(stream, JsonOptions, cancellationToken);
+            if (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(path), "N", out var id)) continue;
+            var item = await GetAsync(id, cancellationToken);
             if (item is not null && item.Status is not (SmartMetrix.Domain.MeasurementStatus.Completed or SmartMetrix.Domain.MeasurementStatus.Rejected or SmartMetrix.Domain.MeasurementStatus.Failed)) result.Add(item);
         }
         return result;
@@ -45,8 +67,8 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
         var result = new List<MeasurementProcess>();
         foreach (var path in Directory.EnumerateFiles(_directory, "*.json"))
         {
-            await using var stream = OpenSnapshot(path);
-            var item = await JsonSerializer.DeserializeAsync<MeasurementProcess>(stream, JsonOptions, cancellationToken);
+            if (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(path), "N", out var id)) continue;
+            var item = await GetAsync(id, cancellationToken);
             if (item is null) continue;
             var terminal = item.Status is SmartMetrix.Domain.MeasurementStatus.Completed or
                 SmartMetrix.Domain.MeasurementStatus.Rejected or SmartMetrix.Domain.MeasurementStatus.Failed;
@@ -74,7 +96,7 @@ public sealed class JsonMeasurementStore(IHostEnvironment environment) : IMeasur
         await gate.WaitAsync(cancellationToken);
         try
         {
-            var current = await GetAsync(measurement.Id, cancellationToken);
+            var current = await ReadAsync(measurement.Id, cancellationToken);
             if (current?.Version != expectedVersion) return false;
             await WriteAsync(measurement, cancellationToken);
             return true;

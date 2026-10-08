@@ -44,6 +44,7 @@ SMARTMETRIX_ARENA_API smartmetrix_arena_status smartmetrix_arena_create(const sm
 SMARTMETRIX_ARENA_API smartmetrix_arena_status smartmetrix_arena_capture(void* context, smartmetrix_arena_frame_set* frame_set);
 SMARTMETRIX_ARENA_API void smartmetrix_arena_release_frame_set(void* context, smartmetrix_arena_frame_set* frame_set);
 SMARTMETRIX_ARENA_API void smartmetrix_arena_destroy(void* context);
+SMARTMETRIX_ARENA_API int32_t smartmetrix_arena_probe(void);
 
 #ifdef __cplusplus
 }
